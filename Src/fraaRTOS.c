@@ -4,8 +4,9 @@
 
 //Easy data structure - array - to keep track of the active threads
 OS_Thread_Type 	                OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
-OS_ThreadIdx_Type volatile  	OS_ThreadIdx 					= 0	;
-OS_ThreadIdx_Type volatile  	OS_ThreadCnt 					= 0	;
+OS_ThreadIdx_Type   	OS_ThreadIdx 					= 0	;
+OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
+OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
 int		          volatile		OS_FirstEntry					= 1;
 
 
@@ -61,7 +62,12 @@ void OS_Start()
 
 void OS_Sched()
 {
-	/* OS_next = ... */
+	//Do the scheduling algorithm here 
+	//Update current thread, which is what was next before. Then choose what goes next.
+	OS_ThreadIdx=OS_ThreadIdx_Next;
+	OS_ThreadIdx_Next = (OS_ThreadIdx + 1) % OS_ThreadCnt;
+
+
     //__NVIC_SetPendingIRQ(PendSV_IRQn); must do it manually if irq number is negative
     SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 }
@@ -80,40 +86,77 @@ void PendSV_Handler(void)
 		/*
 			Save registers which are not saved by the interrupt HW
 			Save the stack pointer in the current thread pointer
-			OS_ActiveThreads[OS_CurrentThread]->_sp = sp
-			Note that one optimization is that _sp member is at address 0 in the struct so in asm we cand do:
-				OS_ActiveThreads[OS_CurrentThread] = sp, as the addresses are the same and also the bit width
+			OS_ActiveThreads[OS_ThreadIdx]->_sp = sp
 			Shift is needed because we have to add the wordsize(four)
 		*/
 		asm(
-			"push {r4-r11}				\n\t"
-			"mov r1,%0   				\n\t"
-			"mov r2,%1              	\n\t"
-		    "lsls r2,r2,#2        \n\t"
-			"add r1,r1,r2               \n\t"
+			"push {r4-r11}                          \n\t"
+			//pointer arithmetic, we move by "sizeof ThreadType at a time"
+			//with this mul we can increase the size of thread type without breaking this asm 
+			"mul r0,%1,%2        \n\t"
+			//add the offset to the OS_Active thread vector base ptr
+			"add r1,%0,r0               \n\t"
+			//_sp is the first member of the struct, so r1 + 0 is where we want it 
 			"str  sp,[r1,#0]             \n\t"
 			: 
-    		: "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
+			: "r" (OS_ActiveThreads), "r" (OS_ThreadIdx), "r" (sizeof(OS_Thread_Type)) :);
 	}
 
 	OS_FirstEntry = 0;
 
-	//Advance in the thread array
-	OS_ThreadIdx = (OS_ThreadIdx + 1) % OS_ThreadCnt;
-
 
 	//Adjust the stack pointer to the new thread, then pop r4-r11
-	asm(
-		"mov r1,%0	\n\t"
-		"mov r2,%1	\n\t"
-	    "lsls r2,r2,#2        \n\t"
-		"add r1,r1,r2        \n\t"
-		"ldr  sp,[r1,#0]             \n\t"
-		"pop {r4-r11}				\n\t"
-    	: 
-    	: "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
+	    asm(
+			//ptr arithmetic, see above
+			"mul r0,%1,%2        \n\t"
+			"add r1,%0,r0        \n\t"
+			//Load sp from next thread 
+			"ldr  sp,[r1,#0]             \n\t"
+			//Pop thread registers into the new stack
+			"pop {r4-r11}                           \n\t"
+			: 
+			: "r" (OS_ActiveThreads), "r" (OS_ThreadIdx_Next), "r" (sizeof(OS_Thread_Type)) :);
 
 	//Enable interrupts again
 	__enable_irq();
 
 }
+
+
+
+
+/*
+                asm(
+                        "push {r4-r11}                          \n\t"
+-                       "mov r1,%0                              \n\t"
+-                       "mov r2,%1                      \n\t"
+-                   "lsls r2,r2,#2        \n\t"
+-                       "add r1,r1,r2               \n\t"
+-                       "str  sp,[r1,#0]             \n\t"
+                        : 
+-               : "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
+        }
+ 
+        OS_FirstEntry = 0;
+ 
+-       //Advance in the thread array
+-       OS_ThreadIdx = (OS_ThreadIdx + 1) % OS_ThreadCnt;
+-
+ 
+        //Adjust the stack pointer to the new thread, then pop r4-r11
+        asm(
+-               "mov r1,%0      \n\t"
+-               "mov r2,%1      \n\t"
+-           "lsls r2,r2,#2        \n\t"
+-               "add r1,r1,r2        \n\t"
+-               "ldr  sp,[r1,#0]             \n\t"
+                "pop {r4-r11}                           \n\t"
+        : 
+-       : "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
+ 
+        //Enable interrupts again
+        __enable_irq();
+
+
+
+*/
