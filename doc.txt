@@ -1,0 +1,81 @@
+Let's discuss how the scheduling works 
+
+1) 	ARM Application Calling Convention
+   
+	1.1) When branching to a function the address of the next instruction is saved on lr register (bl instruction), then the jump is performed. Thanks to this, when returning we can just mov the lr into pc (bx lr instruction for instance).
+
+	1.2) In non leaf funtinos, since bl automatically overwrites lr register, user must push lr to the stack before branching to a function and restore it before the return. 
+
+	1.2.1) 	Case of a non leaf function:
+			
+			nl_fun:
+				/* must save lr because a possible bl instruction will overwrite it */
+				push 	lr
+				; bl somewhere
+				pop 	pc
+				/* The lr is popped directly in the pc, so the return is done in one instruction */
+
+	1.2.2)	Case of a leaf function:
+
+			l_fun:
+				/* body, not calling other functions */
+				mov pc, lr
+				/* The lr is moved directly in the pc because it was not overwritten */
+
+
+   	1.3) ARM requires that registers r0-r3 and r12 are used for passing arguments. As such, those registers can be clobbered by the called function. The remaining registers instead must be saved on the stack if a function wishes to use them, and popped from the stack before returning. They follow more or less the same fate of the lr. 
+
+   	1.3.1) Case of a non leaf function:
+
+   		nl_fun2:
+			/* must save lr and r4-r11 because the called */
+			push 	{ lr, r4-r11 }
+			; bl somewhere
+			; overwrite r5
+			pop 	{ pc, r4-r11 }
+			/* after the return, the callee will find the same content in r5 as was before calling nl_fun2 */
+
+2) 	ARM Cortex M4 Interrupts context switching.
+
+	2.1) Interrupts as functions: with ARM, interrupts can be normal C functions and as such the must comply to the calling convention. They must save lr, and each r4-r11 register that they modify. 
+
+	2.2) Registers r0-r3,r12,lr,pc and xps (processor status) are instead not saved. Since an interrupt can happen at any time, at the entrance of it the afore mentioned registers are saved on the stack by the hardware and restored in the respective place upon returning from the interrupt.
+
+	2.3) Black magic? If interrupts are C functions that means that upon return the lr is pushed on the pc, but if we recall section 1.1 we noticed that there was no bl instruction to enter the interrupt, so the lr is not containing the address of the next instruction. We said that upon entering the interrupt the hw saves the afore-mentioned group of registers but with an addition: it writes a special value on lr (similar to 0xfffffff9). Whenever the ARM core returns, since it is a normal function, it will copy lr into pc. Of course now there is no instruction to be fetched at 0xfffffff9, but the cores uses this special value to know that it has to pop from the stack all the registers which were saved, completing successfully the context switch.
+
+	2.4) Why 0xfffffff9? This depends on the mode of execution and different values mean different set of registers pushed on the stack entering the ISR (and hence popped when exiting). There are a lot more resgiters saved if the fpunit is used or not, for instance. TODO: link here arm documentation.
+
+3) OS context switching.
+
+	3.1) In fraaRTOS each thread is a endless function with its own stack. Assume that one thread A is running, which is no less and no more than a function. The SysTick kicks in and decides that it's time to schedule, also the scheduler decides that it's time to switch to thread B. (More on scheduling algorithm in another doc)
+
+	3.2) Before the ISR of the SysTick function A was using the full set of registers r0-r12 plus lr,sp,pc and xps. After the ISR registers r0-r3,r12,pc,lr and xps are safe on thread A stack, because of the HW mechanism of saving them upon entering ISR (see section 2). The stack pointer is pointing to the last saved register on the stack and lr has the special number. If the ISR was to finish like this the return will place lr into pc, the HW will see the special number in the pc and the group of registers will be restored. 
+
+	3.3) Saving thread A's context: before our ISR returns we push regs r4-r11 to the stack and store the current sp in a safe global variable. Now the entire context of execution of thread A is saved on it's stack. 
+
+	3.4) Restoring thread B's context: we load the sp from thread B sp global variable (which was previously saved). Now the stack pointer is pointing directly on thread B's stack. We pop r4-r11 and we return. In this way the HW, since it's returning from ISR, will pop r0-r3,r12,pc,lr and xps BUT FROM THREAD B'S STACK. We have completed the context switch. 
+
+4) fraaRTOS implementation
+
+	4.1) OS_Sched is the function which is used to implement the scheduling algorithm. More on this when it will be impemented a nice scheduling algorithm. Two idx exists, next and current. Current is the one which will be go "off" and next is the thread that will "kick in".
+
+	4.2) Each thread is captured in a OS_Thread_Type struct, which for now has only the stack pointer. This is the global variable used to save and the restore the sp for the context switch. Those structs are saved into an array and the switch is done cyclically. 
+
+	4.3) In PendSV interrupt the following pseudo code is executed (reasons are in section 2):
+
+			disable_int
+
+			if( not the first time we enter the interrupt )
+			{
+				save on the stack of current thread r4-r11
+				save sp on the current thread struct
+			}
+
+			load sp from next thread struct
+			restore from the stack r4-r11
+
+			enable_int
+
+	4.4) Why PendSV? There is nothing special, but is a service interrupt. Then it also have lower priority so it does not preempt SysTick. This must be the last int to be served. 
+
+	4.5) Tail chaining in ARM processor prevents the mechanism of stacking-unstacking from happening when serving two ISRs back to back. 
