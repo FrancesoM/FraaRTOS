@@ -7,7 +7,7 @@
 //Max number of threads 
 #define NTHREAD_LIMIT 5
 
-extern unsigned int thread1_stack[100];
+typedef enum { OS_STATE_RUN, OS_STATE_WAIT} OS_State_Type;
 
 //first we need a handler to a thread. Every thread is a function that returns void and takes no arguments
 //This is going to be the first instruction of the 
@@ -16,6 +16,7 @@ typedef unsigned int* 	OS_StackPtr_Type; /*Must be word aligned*/
 //Then we need a type for a struct that keeps track of the stack pointer for each thread, to be expanded with other thread info
 typedef struct {
 	OS_StackPtr_Type 	_sp;
+	OS_State_Type		_state;
 	/** more info later **/
 } OS_Thread_Type;
 
@@ -37,6 +38,6 @@ void OS_Start();
 void OS_Sched();
 
 void PendSV_Handler(void);
-
+void SysTick_Handler(void);
 
 #endif //FRAARTOS_H

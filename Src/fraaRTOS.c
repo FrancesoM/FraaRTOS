@@ -7,7 +7,9 @@ OS_Thread_Type 	                OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init
 OS_ThreadIdx_Type   	OS_ThreadIdx 					= 0	;
 OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
-int		          volatile		OS_FirstEntry					= 1;
+int		  volatile		OS_FirstEntry					= 1 ;
+unsigned int volatile   OS_gTime						= 0 ; 	  //Keep track of ms
+
 
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
@@ -72,6 +74,11 @@ void OS_Sched()
     SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
 }
 
+void SysTick_Handler(void)
+{
+	OS_gTime++;
+	OS_Sched();
+}
 
 void PendSV_Handler(void)
 {
@@ -122,41 +129,3 @@ void PendSV_Handler(void)
 
 }
 
-
-
-
-/*
-                asm(
-                        "push {r4-r11}                          \n\t"
--                       "mov r1,%0                              \n\t"
--                       "mov r2,%1                      \n\t"
--                   "lsls r2,r2,#2        \n\t"
--                       "add r1,r1,r2               \n\t"
--                       "str  sp,[r1,#0]             \n\t"
-                        : 
--               : "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
-        }
- 
-        OS_FirstEntry = 0;
- 
--       //Advance in the thread array
--       OS_ThreadIdx = (OS_ThreadIdx + 1) % OS_ThreadCnt;
--
- 
-        //Adjust the stack pointer to the new thread, then pop r4-r11
-        asm(
--               "mov r1,%0      \n\t"
--               "mov r2,%1      \n\t"
--           "lsls r2,r2,#2        \n\t"
--               "add r1,r1,r2        \n\t"
--               "ldr  sp,[r1,#0]             \n\t"
-                "pop {r4-r11}                           \n\t"
-        : 
--       : "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
- 
-        //Enable interrupts again
-        __enable_irq();
-
-
-
-*/
