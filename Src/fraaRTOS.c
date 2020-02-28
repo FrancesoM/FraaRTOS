@@ -172,7 +172,7 @@ void __attribute__((naked)) PendSV_Handler(void)
 			//"cpsid i 		\n\t"
 			//load first entry
 			".global OS_ActiveThreads\n\t"
-			".global OS_ThreadIdx\n\t"
+			".global OS_ThreadIdx_Current\n\t"
 			".global OS_ThreadIdx_Next\n\t"
 			".global OS_FirstEntry\n\t"
 			".global OS_SizeOfThread_Type\n\t"
@@ -189,14 +189,14 @@ void __attribute__((naked)) PendSV_Handler(void)
 			"ldr r0,=OS_SizeOfThread_Type \n\t"  //r0 has the address of sizeof
 			"ldr r0,[r0]\n\t"
 			"mul r0,r3,r0	\n\t"
-			"ldr sp,[r2,r0]		\n\t" //$sp = OS_ActiveThreads[next].sp -->  = $sp = *(OS_ActiveThreads+(OS_ThreadIdx * sizeof(OS_Thread_Type)))
+			"ldr sp,[r2,r0]		\n\t" //$sp = OS_ActiveThreads[next].sp -->  = $sp = *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type)))
 			"pop {r4-r11}		\n\t" //restore reg for next thread
 			//set first entry to 0
 			"mov r0,#0		\n\t"
 			"ldr r1,=OS_FirstEntry	\n\t" //r1 has the address of first entry
 			"str r0,[r1]		\n\t"   //Set first entry to zero
 			//current = next
-			"ldr r1,=OS_ThreadIdx\n\t"  //r1 has address of current thread
+			"ldr r1,=OS_ThreadIdx_Current\n\t"  //r1 has address of current thread
 			"str r3,[r1]		\n\t"
 			"cpsie i		\n\t"
 			"bx lr		\n\t"
@@ -205,13 +205,13 @@ void __attribute__((naked)) PendSV_Handler(void)
 			//pointer arithmetic, we move by "sizeof ThreadType at a time\n\t"
 			//with this mul we can increase the size of thread type without breaking this asm 
 			//Now we can use whatever register we want
-			"ldr r3,=OS_ThreadIdx\n\t" //@ of OS_ThreadIdx
+			"ldr r3,=OS_ThreadIdx_Current\n\t" //@ of OS_ThreadIdx_Current
 			"ldr r3,[r3]\n\t"
 			"ldr r0,=OS_SizeOfThread_Type\n\t"  //r0 has the address of sizeof
 			"ldr r0,[r0]\n\t"
-			"mul r0,r3,r0\n\t" //OS_ThreadIdx * sizeof(OS_Thread_Type)
+			"mul r0,r3,r0\n\t" //OS_ThreadIdx_Current * sizeof(OS_Thread_Type)
 			//This works because sp is the first member, so +0 from the base pointer
-			"str sp,[r2,r0]\n\t" //OS_ActiveThreads[OS_ThreadIdx].sp = $sp --> *(OS_ActiveThreads+(OS_ThreadIdx * sizeof(OS_Thread_Type))) = $sp
+			"str sp,[r2,r0]\n\t" //OS_ActiveThreads[OS_ThreadIdx_Current].sp = $sp --> *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type))) = $sp
 			"b restore_next_context\n\t"
 			: 
 			: 
