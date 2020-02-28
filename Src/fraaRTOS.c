@@ -3,14 +3,22 @@
 /* GLOBAL VARIABLES USED BY THE OS */
 
 //Easy data structure - array - to keep track of the active threads
-OS_Thread_Type 	                OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
-OS_ThreadIdx_Type   	OS_ThreadIdx 					= 0	;
+OS_Thread_Type 	        OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
+OS_ThreadIdx_Type   	OS_ThreadIdx_Current 			= 0	;
 OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
-int		  volatile		OS_FirstEntry					= 1 ;
-unsigned int volatile   OS_gTime						= 0 ; 	  //Keep track of ms
+int		  NO_OPT		OS_FirstEntry					= 1 ;
+unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
 const int   OS_SizeOfThread_Type = sizeof(OS_Thread_Type);
 
+unsigned int OS_IdleStack[100];
+void OS_IdleThread()
+{
+  while(1)
+  {
+  	//DO NOTHIGN AS IDLE
+  }
+}
 
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
@@ -45,35 +53,100 @@ void OS_ThreadInit(OS_ThreadHandler  		threadHandler,
     *(--sp) = 0x00000004U; /* R4 */
 
     //Set stack in the thread struct
-    OS_ActiveThreads[OS_ThreadIdx]._sp = sp;
-    OS_ThreadIdx++;
+    OS_ActiveThreads[OS_ThreadIdx_Current]._sp = sp;
+    OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
+
 
 }
 
 void OS_Start()
 {
+	//Add the IDLE thread
+	OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
 	//The threadIdx is sitting at the next thread which doesn't exist, let's reset it
-	OS_ThreadIdx = 0;
+	OS_ThreadIdx_Current = 0;
 	//Suggested by arm in case some external lib is changing the priority groups
 	NVIC_SetPriorityGrouping(0U);
 	//Pending must be the least to run, so lowest prio
 	__NVIC_SetPriority(PendSV_IRQn,15);
 	//Set this to switch from main contex just the first time
 	OS_FirstEntry = 1;
+	//Set all threads to running
+ 	for( int i = 0; i < OS_ThreadCnt; i++)
+	{
+		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
+		pcurrent->_state = OS_STATE_RUN;
+		pcurrent->_time_to_wake = 0;
+		pcurrent->_time_at_wait = 0;
+	}   
 }
 
 void OS_Sched()
 {
 	//Do the scheduling algorithm here 
-	//Update current thread, which is what was next before. Then choose what goes next.
-	//OS_ThreadIdx=OS_ThreadIdx_Next;
-	OS_ThreadIdx_Next = (OS_ThreadIdx + 1) % OS_ThreadCnt;
+	
+	__disable_irq();
+	//Scheduling step has to take into consideration the state of the threads, if on wait, don't bother scheduling
 
+	//The first step is then to update all the states
+	for( int i = 0; i < OS_ThreadCnt; i++)
+	{
+		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
+		int elapsed_time = OS_gTime - pcurrent->_time_at_wait;
+		if (elapsed_time >= pcurrent->_time_to_wake)
+		{
+			//update the state because it has to be waken up
+			pcurrent->_state = OS_STATE_RUN;
+		}
+	}
+
+
+	//The second step is to update the current thread. 
+	//Update current thread, which is what was next before. Then choose what goes next.
+
+	//OS_ThreadIdx_Current=OS_ThreadIdx_Next;
+	OS_ThreadIdx_Type OS_BeginIdx          			= OS_ThreadIdx_Current;
+	OS_ThreadIdx_Type OS_ThreadIdx_Next_Tentative	= (OS_ThreadIdx_Current + 1) % OS_ThreadCnt;
+
+	//Iterate until find a thread that is in the run state, or until you circle to where the search began
+	while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
+	{
+		if( OS_ActiveThreads[OS_ThreadIdx_Next_Tentative]._state == OS_STATE_RUN )
+		{
+			//A candidate next thread has been found, set pendSV and break while
+			OS_ThreadIdx_Next 	=	OS_ThreadIdx_Next_Tentative;
+			SCB->ICSR 			|= SCB_ICSR_PENDSVSET_Msk;
+			break;
+		}
+		else
+		{
+			//Just try the next one
+			OS_ThreadIdx_Next_Tentative = (OS_ThreadIdx_Next_Tentative + 1) % OS_ThreadCnt;
+		}
+	}
+	__enable_irq();
 
     //__NVIC_SetPendingIRQ(PendSV_IRQn); must do it manually if irq number is negative
-    SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+    
+    
 }
+
+void OS_Wait(unsigned int ms)
+{
+	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
+	//on the current thread which called OS_Wait, otherwise everything is broken.
+	__disable_irq();
+	//Get current thread
+	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[OS_ThreadIdx_Current]);
+	pcurrent->_time_to_wake = ms;
+	pcurrent->_time_at_wait = OS_gTime;
+	pcurrent->_state = OS_STATE_WAIT;
+	__enable_irq();
+	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
+	OS_Sched();
+}
+
 
 void SysTick_Handler(void)
 {
@@ -91,7 +164,7 @@ void __attribute__((naked)) PendSV_Handler(void)
 		/*
 			Save registers which are not saved by the interrupt HW
 			Save the stack pointer in the current thread pointer
-			OS_ActiveThreads[OS_ThreadIdx]->_sp = sp
+			OS_ActiveThreads[OS_ThreadIdx_Current]->_sp = sp
 			Shift is needed because we have to add the wordsize(four)
 		*/
 		asm volatile(
