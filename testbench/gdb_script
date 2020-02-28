@@ -1,0 +1,5 @@
+file build/blink_test.elf
+tar extended-remote :4242
+br OS_Sched
+br PendSV_Handler
+run
