@@ -3,11 +3,22 @@
 /* GLOBAL VARIABLES USED BY THE OS */
 
 //Easy data structure - array - to keep track of the active threads
-OS_Thread_Type 	                OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
-OS_ThreadIdx_Type   	OS_ThreadIdx 					= 0	;
+OS_Thread_Type 	        OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
+OS_ThreadIdx_Type   	OS_ThreadIdx_Current 			= 0	;
 OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
-int		          volatile		OS_FirstEntry					= 1;
+int		  NO_OPT		OS_FirstEntry					= 1 ;
+unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
+const int   OS_SizeOfThread_Type = sizeof(OS_Thread_Type);
+
+unsigned int OS_IdleStack[100];
+void OS_IdleThread()
+{
+  while(1)
+  {
+  	//DO NOTHIGN AS IDLE
+  }
+}
 
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
@@ -42,121 +53,169 @@ void OS_ThreadInit(OS_ThreadHandler  		threadHandler,
     *(--sp) = 0x00000004U; /* R4 */
 
     //Set stack in the thread struct
-    OS_ActiveThreads[OS_ThreadIdx]._sp = sp;
-    OS_ThreadIdx++;
+    OS_ActiveThreads[OS_ThreadIdx_Current]._sp = sp;
+    OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
+
 
 }
 
 void OS_Start()
 {
+	//Add the IDLE thread
+	OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
 	//The threadIdx is sitting at the next thread which doesn't exist, let's reset it
-	OS_ThreadIdx = 0;
+	OS_ThreadIdx_Current = 0;
 	//Suggested by arm in case some external lib is changing the priority groups
 	NVIC_SetPriorityGrouping(0U);
 	//Pending must be the least to run, so lowest prio
 	__NVIC_SetPriority(PendSV_IRQn,15);
 	//Set this to switch from main contex just the first time
 	OS_FirstEntry = 1;
+	//Set all threads to running
+ 	for( int i = 0; i < OS_ThreadCnt; i++)
+	{
+		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
+		pcurrent->_state = OS_STATE_RUN;
+		pcurrent->_time_to_wake = 0;
+		pcurrent->_time_at_wait = 0;
+	}   
 }
 
 void OS_Sched()
 {
 	//Do the scheduling algorithm here 
-	//Update current thread, which is what was next before. Then choose what goes next.
-	OS_ThreadIdx=OS_ThreadIdx_Next;
-	OS_ThreadIdx_Next = (OS_ThreadIdx + 1) % OS_ThreadCnt;
+	
+	__disable_irq();
+	//Scheduling step has to take into consideration the state of the threads, if on wait, don't bother scheduling
 
+	//The first step is then to update all the states
+	for( int i = 0; i < OS_ThreadCnt; i++)
+	{
+		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
+		int elapsed_time = OS_gTime - pcurrent->_time_at_wait;
+		if (elapsed_time >= pcurrent->_time_to_wake)
+		{
+			//update the state because it has to be waken up
+			pcurrent->_state = OS_STATE_RUN;
+		}
+	}
+
+
+	//The second step is to update the current thread. 
+	//Update current thread, which is what was next before. Then choose what goes next.
+
+	//OS_ThreadIdx_Current=OS_ThreadIdx_Next;
+	OS_ThreadIdx_Type OS_BeginIdx          			= OS_ThreadIdx_Current;
+	OS_ThreadIdx_Type OS_ThreadIdx_Next_Tentative	= (OS_ThreadIdx_Current + 1) % OS_ThreadCnt;
+
+	//Iterate until find a thread that is in the run state, or until you circle to where the search began
+	while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
+	{
+		if( OS_ActiveThreads[OS_ThreadIdx_Next_Tentative]._state == OS_STATE_RUN )
+		{
+			//A candidate next thread has been found, set pendSV and break while
+			OS_ThreadIdx_Next 	=	OS_ThreadIdx_Next_Tentative;
+			SCB->ICSR 			|= SCB_ICSR_PENDSVSET_Msk;
+			break;
+		}
+		else
+		{
+			//Just try the next one
+			OS_ThreadIdx_Next_Tentative = (OS_ThreadIdx_Next_Tentative + 1) % OS_ThreadCnt;
+		}
+	}
+	__enable_irq();
 
     //__NVIC_SetPendingIRQ(PendSV_IRQn); must do it manually if irq number is negative
-    SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+    
+    
+}
+
+void OS_Wait(unsigned int ms)
+{
+	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
+	//on the current thread which called OS_Wait, otherwise everything is broken.
+	__disable_irq();
+	//Get current thread
+	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[OS_ThreadIdx_Current]);
+	pcurrent->_time_to_wake = ms;
+	pcurrent->_time_at_wait = OS_gTime;
+	pcurrent->_state = OS_STATE_WAIT;
+	__enable_irq();
+	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
+	OS_Sched();
 }
 
 
-void PendSV_Handler(void)
+void SysTick_Handler(void)
 {
-	//Critical code, disable other ISR
+	OS_gTime++;
+	OS_Sched();
+}
+
+void __attribute__((naked)) PendSV_Handler(void)
+{
+
+
 	__disable_irq();
-
-
 	//Tricky part is the first we enter the interrupt, coming from the main
 	//Here the registers are not to be saved in any stack 
-	if (OS_FirstEntry == 0)
-	{
 		/*
 			Save registers which are not saved by the interrupt HW
 			Save the stack pointer in the current thread pointer
-			OS_ActiveThreads[OS_ThreadIdx]->_sp = sp
+			OS_ActiveThreads[OS_ThreadIdx_Current]->_sp = sp
 			Shift is needed because we have to add the wordsize(four)
 		*/
-		asm(
+		asm volatile(
+			//disable interrupts
+			//"cpsid i 		\n\t"
+			//load first entry
+			".global OS_ActiveThreads\n\t"
+			".global OS_ThreadIdx_Current\n\t"
+			".global OS_ThreadIdx_Next\n\t"
+			".global OS_FirstEntry\n\t"
+			".global OS_SizeOfThread_Type\n\t"
+
+			"ldr r1,=OS_FirstEntry 		\n\t"
+			//Load base address acrive threads
+			"ldr r2,=OS_ActiveThreads		\n\t" //OS_ActiveThreads
+			//If first entry is true, restore context 
+			"ldr r1,[r1]\n\t" //r1 had the address of the variable
+			"cbz r1, save_current_context		\n\t"
+			"restore_next_context:		\n\t"
+			"ldr r3,=OS_ThreadIdx_Next		\n\t" //r3 has the address of idx next
+			"ldr r3,[r3]\n\t"//r3 has the next index
+			"ldr r0,=OS_SizeOfThread_Type \n\t"  //r0 has the address of sizeof
+			"ldr r0,[r0]\n\t"
+			"mul r0,r3,r0	\n\t"
+			"ldr sp,[r2,r0]		\n\t" //$sp = OS_ActiveThreads[next].sp -->  = $sp = *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type)))
+			"pop {r4-r11}		\n\t" //restore reg for next thread
+			//set first entry to 0
+			"mov r0,#0		\n\t"
+			"ldr r1,=OS_FirstEntry	\n\t" //r1 has the address of first entry
+			"str r0,[r1]		\n\t"   //Set first entry to zero
+			//current = next
+			"ldr r1,=OS_ThreadIdx_Current\n\t"  //r1 has address of current thread
+			"str r3,[r1]		\n\t"
+			"cpsie i		\n\t"
+			"bx lr		\n\t"
+			"save_current_context:		\n\t"
 			"push {r4-r11}                          \n\t"
-			//pointer arithmetic, we move by "sizeof ThreadType at a time"
+			//pointer arithmetic, we move by "sizeof ThreadType at a time\n\t"
 			//with this mul we can increase the size of thread type without breaking this asm 
-			"mul r0,%1,%2        \n\t"
-			//add the offset to the OS_Active thread vector base ptr
-			"add r1,%0,r0               \n\t"
-			//_sp is the first member of the struct, so r1 + 0 is where we want it 
-			"str  sp,[r1,#0]             \n\t"
+			//Now we can use whatever register we want
+			"ldr r3,=OS_ThreadIdx_Current\n\t" //@ of OS_ThreadIdx_Current
+			"ldr r3,[r3]\n\t"
+			"ldr r0,=OS_SizeOfThread_Type\n\t"  //r0 has the address of sizeof
+			"ldr r0,[r0]\n\t"
+			"mul r0,r3,r0\n\t" //OS_ThreadIdx_Current * sizeof(OS_Thread_Type)
+			//This works because sp is the first member, so +0 from the base pointer
+			"str sp,[r2,r0]\n\t" //OS_ActiveThreads[OS_ThreadIdx_Current].sp = $sp --> *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type))) = $sp
+			"b restore_next_context\n\t"
 			: 
-			: "r" (OS_ActiveThreads), "r" (OS_ThreadIdx), "r" (sizeof(OS_Thread_Type)) :);
-	}
-
-	OS_FirstEntry = 0;
-
-
-	//Adjust the stack pointer to the new thread, then pop r4-r11
-	    asm(
-			//ptr arithmetic, see above
-			"mul r0,%1,%2        \n\t"
-			"add r1,%0,r0        \n\t"
-			//Load sp from next thread 
-			"ldr  sp,[r1,#0]             \n\t"
-			//Pop thread registers into the new stack
-			"pop {r4-r11}                           \n\t"
 			: 
-			: "r" (OS_ActiveThreads), "r" (OS_ThreadIdx_Next), "r" (sizeof(OS_Thread_Type)) :);
-
-	//Enable interrupts again
-	__enable_irq();
+			: );
 
 }
 
-
-
-
-/*
-                asm(
-                        "push {r4-r11}                          \n\t"
--                       "mov r1,%0                              \n\t"
--                       "mov r2,%1                      \n\t"
--                   "lsls r2,r2,#2        \n\t"
--                       "add r1,r1,r2               \n\t"
--                       "str  sp,[r1,#0]             \n\t"
-                        : 
--               : "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
-        }
- 
-        OS_FirstEntry = 0;
- 
--       //Advance in the thread array
--       OS_ThreadIdx = (OS_ThreadIdx + 1) % OS_ThreadCnt;
--
- 
-        //Adjust the stack pointer to the new thread, then pop r4-r11
-        asm(
--               "mov r1,%0      \n\t"
--               "mov r2,%1      \n\t"
--           "lsls r2,r2,#2        \n\t"
--               "add r1,r1,r2        \n\t"
--               "ldr  sp,[r1,#0]             \n\t"
-                "pop {r4-r11}                           \n\t"
-        : 
--       : "r" (OS_ActiveThreads), "r" (OS_ThreadIdx) );
- 
-        //Enable interrupts again
-        __enable_irq();
-
-
-
-*/
