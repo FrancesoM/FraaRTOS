@@ -8,7 +8,7 @@
 #define NTHREAD_LIMIT 5
 #define NO_OPT volatile
 
-typedef enum { OS_STATE_RUN, OS_STATE_WAIT} OS_State_Type;
+typedef enum { OS_STATE_RUN, OS_STATE_WAIT, OS_STATE_SLEEP} OS_State_Type;
 
 //first we need a handler to a thread. Every thread is a function that returns void and takes no arguments
 //This is going to be the first instruction of the 
@@ -29,7 +29,7 @@ typedef int 			volatile OS_ThreadIdx_Type;
 
 //We want to initialize the stack of our thread, so we pass the thread struct, the handler (to init PC) and the stack
 //The stack must be allocated by the user in this early implementation
-void OS_ThreadInit(OS_ThreadHandler  		threadHandler,
+int OS_ThreadInit(OS_ThreadHandler  		threadHandler,
 	               OS_StackPtr_Type  		threadStack, 
 	               int               		threadStack_size  
 	              );
@@ -40,6 +40,7 @@ void OS_Start();
 //Critical code, if need to switch threads this function changes the registers 
 void OS_Sched();
 void OS_Wait(unsigned int ms);
+void OS_Sleep();
 
 
 //Interrupts 

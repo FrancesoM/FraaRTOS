@@ -22,8 +22,8 @@ void OS_IdleThread()
 
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
-
-void OS_ThreadInit(OS_ThreadHandler  		threadHandler,
+//The returned value is for the user to refer to this thread in advance
+int OS_ThreadInit(OS_ThreadHandler  		threadHandler,
 	               OS_StackPtr_Type  		threadStack, 
 	               int               		threadStack_size
 	              )
@@ -32,7 +32,7 @@ void OS_ThreadInit(OS_ThreadHandler  		threadHandler,
 	OS_StackPtr_Type sp = &(threadStack[0]) + threadStack_size;
 	OS_StackPtr_Type sp_limit = &(threadStack[0]) - 1;
 
-
+	//TODO: stack must account for floating point unit - calling convention
 	//Init a stack frame
 	*(--sp) = (1U << 24);  /* xPSR */
     *(--sp) = (unsigned int)threadHandler; /* PC */
@@ -56,7 +56,7 @@ void OS_ThreadInit(OS_ThreadHandler  		threadHandler,
     OS_ActiveThreads[OS_ThreadIdx_Current]._sp = sp;
     OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
-
+    return OS_ThreadIdx_Current-1;
 
 }
 
@@ -93,12 +93,18 @@ void OS_Sched()
 	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
 		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
-		int elapsed_time = OS_gTime - pcurrent->_time_at_wait;
-		if (elapsed_time >= pcurrent->_time_to_wake)
+		
+		//If state is RUN no need to count elapsed, if state is SLEEP it won't be woken anyway
+		if( pcurrent->_state == OS_STATE_WAIT)
 		{
-			//update the state because it has to be waken up
-			pcurrent->_state = OS_STATE_RUN;
+			int elapsed_time = OS_gTime - pcurrent->_time_at_wait;
+			if (elapsed_time >= pcurrent->_time_to_wake)
+			{
+				//update the state because it has to be waken up
+				pcurrent->_state = OS_STATE_RUN;
+			}			
 		}
+
 	}
 
 
@@ -144,13 +150,40 @@ void OS_Wait(unsigned int ms)
 	pcurrent->_state = OS_STATE_WAIT;
 	__enable_irq();
 	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
+	//This call is important, otherwise we might keep going on with the thread in the WAIT state, something tht 
+	//must never happen. With this call to sched instead we ensure that a thread in the WAIT state is never run, 
+	//because a context switch is always done. 
+	OS_Sched();
+}
+
+void OS_Sleep()
+{
+	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
+	//on the current thread which called OS_Wait, otherwise everything is broken.
+	__disable_irq();
+	//Get current thread
+	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[OS_ThreadIdx_Current]);
+	pcurrent->_state = OS_STATE_SLEEP;
+	__enable_irq();
+	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
+	OS_Sched();
+}
+
+//How does the user get the thread ID? 
+void OS_Awake(int threadID)
+{
+	__disable_irq();
+	//Get current thread
+	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[threadID]);
+	pcurrent->_state = OS_STATE_RUN;
+	__enable_irq();
 	OS_Sched();
 }
 
 
 void SysTick_Handler(void)
 {
-	OS_gTime++;
+	OS_gTime++; //TODO: this will overflow
 	OS_Sched();
 }
 

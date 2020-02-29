@@ -32,7 +32,7 @@ void thread1()
   {
     LL_GPIO_TogglePin(LD3_GPIO_Port,LD3_Pin);
     //for(int i = 0; i < 5000000; i++){};
-    OS_Wait(1000);
+    OS_Wait(500);
   }
 }
 
