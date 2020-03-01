@@ -193,7 +193,6 @@ void EXTI0_IRQHandler(void)
     LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_0);
 
   }
-  pressed = 1;
   OS_Awake(thread1_ID);
 }
 

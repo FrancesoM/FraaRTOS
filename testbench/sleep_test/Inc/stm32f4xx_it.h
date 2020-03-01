@@ -47,7 +47,6 @@
 /* USER CODE END EM */
 
 
-extern int volatile pressed;
 extern int volatile thread1_ID;
 
 /* Exported functions prototypes ---------------------------------------------*/

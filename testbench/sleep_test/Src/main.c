@@ -25,22 +25,16 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 
 //Define my threads
-int volatile pressed = 0;
 int volatile thread1_ID;
 unsigned int thread1_stack[100];
 void thread1()
 {
   while(1)
   {
-    //for(int i = 0; i < 5000000; i++){};
-    if(pressed)
-    {
-      //The idea is that the button pressed will just flip the variable to 1
-      //The scheduler will see that the thread is woken up and will try to schedule it
-      pressed = 0;    
-      LL_GPIO_TogglePin(LD3_GPIO_Port,LD3_Pin);
-      OS_Sleep();
-    }
+
+    LL_GPIO_TogglePin(LD3_GPIO_Port,LD3_Pin);
+    OS_Sleep();
+  
 
   }
 }
