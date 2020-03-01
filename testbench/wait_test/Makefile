@@ -13,7 +13,7 @@
 ######################################
 # target
 ######################################
-TARGET = testbench
+TARGET = wait_test
 
 
 ######################################
@@ -103,7 +103,8 @@ C_DEFS =  \
 -DPREFETCH_ENABLE=1 \
 -DINSTRUCTION_CACHE_ENABLE=1 \
 -DDATA_CACHE_ENABLE=1 \
--DSTM32F407xx
+-DSTM32F407xx \
+-DGDB_DEBUG
 
 
 # AS includes
@@ -181,13 +182,21 @@ $(BUILD_DIR):
 #######################################
 # flash
 #######################################
+flash: all
+	sudo ${ST_DIR}/st-flash --format ihex write $(BUILD_DIR)/$(TARGET).hex
+
+#######################################
+# test
+#######################################
+test: flash
+	./run_test.sh 
 
 #######################################
 # clean up
 #######################################
 clean:
 	-rm -fR $(BUILD_DIR)
-  
+
 #######################################
 # dependencies
 #######################################
