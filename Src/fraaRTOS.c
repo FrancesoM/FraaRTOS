@@ -177,7 +177,7 @@ void OS_Awake(int threadID)
 	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[threadID]);
 	pcurrent->_state = OS_STATE_RUN;
 	__enable_irq();
-	OS_Sched();
+	//OS_Sched();
 }
 
 

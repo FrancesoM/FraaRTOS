@@ -41,6 +41,7 @@ void OS_Start();
 void OS_Sched();
 void OS_Wait(unsigned int ms);
 void OS_Sleep();
+void OS_Awake(int threadID);
 
 
 //Interrupts 
