@@ -3,8 +3,10 @@ This is my first tentative to create a small OS for ARM Cortex M4
 
 # Structure 
 
-The repo is divided in the OS files (Src and Inc) and the testbench. 
-The testbench contains a very small project for an STM32 DISCOVERY board, which I use to test the OS.
+The repo is divided in the three main parts:
+* OS files (Src and Inc) 
+* The testbench. This part contains some small projects for an STM32 DISCOVERY board, which I use to test the OS. There is also a primitive structure for automated testing. The top makefile can call all the make test which compile, flash and automate the GDB session. GDB outputs in gdb.output. A user written python script is then called to assess that  gdb log is fine. 
+* The Doc folder which is about how to use the library and some design choices. 
 
 
 # Testbench
