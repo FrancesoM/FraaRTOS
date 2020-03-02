@@ -49,7 +49,8 @@ int OS_SetTimeResoltion(unsigned int u32us);
 
 //This sets for how long a thread is allowed to run before being pre-empted
 //Notice that the scheduler may decide to not preempt the current thread and return without doing the context switch
-void OS_SetTimeSlice(int us);
+//If for example the time resolution is 100us, then 10 base units means schedule each 10*100us = 1ms
+void OS_SetTimeSlice(uint32_t u32n_baseTicks);
 
 
 //Critical code, if need to switch threads this function changes the registers 

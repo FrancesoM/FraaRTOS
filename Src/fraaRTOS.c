@@ -11,7 +11,11 @@ int		  NO_OPT		OS_FirstEntry					= 1 ;
 unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
 const int   OS_SizeOfThread_Type = sizeof(OS_Thread_Type);
 
-unsigned int OS_IdleStack[100];
+//Used for deciding for how long a thread should run
+int NO_OPT 				OS_T_StartSlice 					= 0;
+int NO_OPT 				OS_SliceDuration				   ;
+
+unsigned int OS_IdleStack[20];
 void OS_IdleThread()
 {
   while(1)
@@ -221,19 +225,30 @@ int OS_SetTimeResoltion(unsigned int u32us)
 	}
 
 	LL_SYSTICK_EnableIT();
+
+	//Set a default  duration for the time slice of 10 "base units"
+	OS_SliceDuration = 10;
+
 	return 0;
 }
 
-void OS_SetTimeSlice(int us)
+void OS_SetTimeSlice(uint32_t u32n_baseTicks)
 {
-	;
+	OS_SliceDuration = u32n_baseTicks;
 }
 
 
 void SysTick_Handler(void)
 {
-	OS_gTime++; //TODO: this will overflow
-	OS_Sched();
+	OS_gTime++; //WARN: this will overflow
+
+	//OS_StartSlive starts at 0
+	if( OS_gTime - OS_T_StartSlice >= OS_SliceDuration )
+	{
+		OS_T_StartSlice = OS_gTime;
+		OS_Sched();
+	}
+	
 }
 
 void __attribute__((naked)) PendSV_Handler(void)
