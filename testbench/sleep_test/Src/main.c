@@ -114,12 +114,10 @@ void SystemClock_Config(void)
   {
   
   }
-  //TODO: This must go into the OS libraries - but better stay here 
-  //until I found a better way to adapt to different clk frequencies
-  LL_InitTick(168000000/16,1000);
-  LL_SYSTICK_SetClkSource(LL_SYSTICK_CLKSOURCE_HCLK_DIV8);
-  LL_SYSTICK_EnableIT();
-  //LL_SetSystemCoreClock(168000000);
+
+  OS_SetTimeResoltion(1000);
+
+
 }
 
 /**

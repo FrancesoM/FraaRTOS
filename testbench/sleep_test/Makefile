@@ -103,7 +103,9 @@ C_DEFS =  \
 -DPREFETCH_ENABLE=1 \
 -DINSTRUCTION_CACHE_ENABLE=1 \
 -DDATA_CACHE_ENABLE=1 \
--DSTM32F407xx
+-DFREQ_CORTEX=168000000UL \
+-DSTM32F407xx 
+
 
 
 # AS includes
@@ -187,7 +189,8 @@ flash: all
 # test
 #######################################
 test: flash
-	./run_test.sh 
+	@echo "test not implemented"
+	#./run_test.sh 
 
 #######################################
 # clean up

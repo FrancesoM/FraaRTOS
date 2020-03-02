@@ -180,6 +180,55 @@ void OS_Awake(int threadID)
 	//OS_Sched();
 }
 
+int OS_SetTimeResoltion(unsigned int u32us)
+{
+
+
+	//1/Fclk * TICKS = INTERRUPT_PERIOD
+	//TICKS = INTERRUPT_PERIOD * Fclk
+	//WARN: cortex frequency must be multiple of MHz otherwise division is a problem
+
+	uint32_t u32load = (uint32_t)((FREQ_CORTEX / 1000000U * u32us ) - 1UL);
+
+	//This value can't be greater than 24bits, so 
+	if ( u32load >= 0xFFFFFFU )
+	{
+		//Try again with the clock frequency divided by 8 
+		u32load = (uint32_t)((FREQ_CORTEX / 8000000U * u32us ) - 1UL);
+		//If it is still greater then return error
+		if ( u32load >= 0xFFFFFFU )
+		{
+			//TODO: have some ret codes
+			return -1;
+		}
+		else
+		{
+			SysTick->LOAD  = u32load;  /* set reload register */
+			SysTick->VAL   = 0UL;                                       /* Load the SysTick Counter Value */
+			SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk |
+							 SysTick_CTRL_ENABLE_Msk;                   /* Enable the Systick Timer */
+			LL_SYSTICK_SetClkSource(LL_SYSTICK_CLKSOURCE_HCLK_DIV8);
+		}
+
+	}
+	else
+	{
+		SysTick->LOAD  = u32load;  /* set reload register */
+		SysTick->VAL   = 0UL;                                       /* Load the SysTick Counter Value */
+		SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk |
+						 SysTick_CTRL_ENABLE_Msk;                   /* Enable the Systick Timer */
+		LL_SYSTICK_SetClkSource(LL_SYSTICK_CLKSOURCE_HCLK);
+	}
+
+	LL_SYSTICK_EnableIT();
+	return 0;
+}
+
+void OS_SetTimeSlice(int us)
+{
+	;
+}
+
 
 void SysTick_Handler(void)
 {
