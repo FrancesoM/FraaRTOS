@@ -21,7 +21,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-void SystemClock_Config(void);
+static void sysTick_init(void);
 static void MX_GPIO_Init(void);
 
 //Define my threads
@@ -51,20 +51,19 @@ void thread2()
 int main(void)
 {
 
-  //Need to do them before Systick interrupt is enabled
-  OS_ThreadInit(thread1,thread1_stack,40);
-  OS_ThreadInit(thread2,thread2_stack,40);
-  OS_Start();
-
   LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
 
   NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_0);
 
-  SystemClock_Config();
-
   MX_GPIO_Init();
 
+  //Need to do them before Systick interrupt is enabled
+  OS_ThreadInit(thread1,thread1_stack,40);
+  OS_ThreadInit(thread2,thread2_stack,40);
+  OS_Start();
+
+  sysTick_init();
   
   while (1)
   {
@@ -74,47 +73,18 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
+  * @brief Initialization of SysTick with timebase 1ms
   */
-void SystemClock_Config(void)
-{
-  LL_FLASH_SetLatency(LL_FLASH_LATENCY_5);
-
-  if(LL_FLASH_GetLatency() != LL_FLASH_LATENCY_5)
-  {
-  Error_Handler();  
-  }
-  LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
-  LL_RCC_HSE_Enable();
-
-   /* Wait till HSE is ready */
-  while(LL_RCC_HSE_IsReady() != 1)
-  {
-    
-  }
-  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSE, LL_RCC_PLLM_DIV_8, 336, LL_RCC_PLLP_DIV_2);
-  LL_RCC_PLL_Enable();
-
-   /* Wait till PLL is ready */
-  while(LL_RCC_PLL_IsReady() != 1)
-  {
-    
-  }
-  LL_RCC_SetAHBPrescaler(LL_RCC_SYSCLK_DIV_1);
-  LL_RCC_SetAPB1Prescaler(LL_RCC_APB1_DIV_4);
-  LL_RCC_SetAPB2Prescaler(LL_RCC_APB2_DIV_2);
-  LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_PLL);
-
-   /* Wait till System clock is ready */
-  while(LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_PLL)
-  {
-  
-  }
-
-  OS_SetTimeResoltion(1000);
-
-
+static void sysTick_init(void) {
+  // RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+  // RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+  NVIC_SetPriorityGrouping(0U);    //4 bits for preemp priority 0 bit for sub priority
+  NVIC_SetPriority(SysTick_IRQn, 3); /* set Priority for Systick Interrupt */
+  // SysTick_Config(SystemCoreClock / 1000);
+  /* Configure the SysTick to have interrupt in 1ms time base */
+  SysTick->LOAD  = (uint32_t)((168000000 / 1000) - 1UL);  /* set reload register */
+  SysTick->VAL   = 0UL;                                       /* Load the SysTick Counter Value */
+  SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk;                   /* Enable the Systick Timer */
 }
 
 /**

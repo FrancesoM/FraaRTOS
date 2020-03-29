@@ -43,7 +43,7 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_rcc.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_utils.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_exti.c \
 Src/system_stm32f4xx.c  \
-${FRAARTOS_DIR}/Src/fraaRTOS.c
+../../Src/fraaRTOS.c
 
 # ASM sources
 ASM_SOURCES =  \
@@ -116,7 +116,7 @@ C_INCLUDES =  \
 -IDrivers/STM32F4xx_HAL_Driver/Inc \
 -IDrivers/CMSIS/Device/ST/STM32F4xx/Include \
 -IDrivers/CMSIS/Include \
--I${FRAARTOS_DIR}/Inc
+-I../../Inc
 
 
 # compile gcc flags
