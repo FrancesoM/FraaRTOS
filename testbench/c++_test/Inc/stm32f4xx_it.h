@@ -46,6 +46,9 @@
 
 /* USER CODE END EM */
 
+
+extern int volatile thread1_ID;
+
 /* Exported functions prototypes ---------------------------------------------*/
 void NMI_Handler(void);
 void HardFault_Handler(void);
@@ -54,8 +57,9 @@ void BusFault_Handler(void);
 void UsageFault_Handler(void);
 void SVC_Handler(void);
 void DebugMon_Handler(void);
-//void PendSV_Handler(void); Reimplemented by fraaRTOS
-void SysTick_Handler(void);
+//void PendSV_Handler(void);
+//void SysTick_Handler(void);
+void EXTI0_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */

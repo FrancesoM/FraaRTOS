@@ -25,14 +25,17 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 
 //Define my threads
+int volatile thread1_ID;
 unsigned int thread1_stack[100];
 void thread1()
 {
   while(1)
   {
+
     LL_GPIO_TogglePin(LD3_GPIO_Port,LD3_Pin);
-    //for(int i = 0; i < 5000000; i++){};
-    OS_Wait(500);
+    OS_Sleep();
+  
+
   }
 }
 
@@ -48,23 +51,13 @@ void thread2()
 }
 
 
-//_OS::Thread t1 = _OS::Thread(thread1,thread1_stack,40);
-//_OS::Thread t2 = _OS::Thread(thread2,thread2_stack,40);
-
-
-
 int main(void)
 {
 
-  int volatile a;
-
   //Need to do them before Systick interrupt is enabled
-  OS_ThreadInit(thread1,thread1_stack,40);
+  thread1_ID = OS_ThreadInit(thread1,thread1_stack,40);
   OS_ThreadInit(thread2,thread2_stack,40);
   OS_Start();
-
-  Dummy X = Dummy();
-  X.SayHi(a);
 
   LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
@@ -261,7 +254,7 @@ static void MX_GPIO_Init(void)
   /**/
   EXTI_InitStruct.Line_0_31 = LL_EXTI_LINE_0;
   EXTI_InitStruct.LineCommand = ENABLE;
-  EXTI_InitStruct.Mode = LL_EXTI_MODE_EVENT;
+  EXTI_InitStruct.Mode = LL_EXTI_MODE_IT;
   EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_RISING;
   LL_EXTI_Init(&EXTI_InitStruct);
 
@@ -273,16 +266,20 @@ static void MX_GPIO_Init(void)
   LL_EXTI_Init(&EXTI_InitStruct);
 
   /**/
-  LL_GPIO_SetPinPull(B1_GPIO_Port, B1_Pin, LL_GPIO_PULL_NO);
+  LL_GPIO_SetPinPull(GPIOA, LL_GPIO_PIN_0, LL_GPIO_PULL_NO);
 
   /**/
   LL_GPIO_SetPinPull(MEMS_INT2_GPIO_Port, MEMS_INT2_Pin, LL_GPIO_PULL_NO);
 
   /**/
-  LL_GPIO_SetPinMode(B1_GPIO_Port, B1_Pin, LL_GPIO_MODE_INPUT);
+  LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_0, LL_GPIO_MODE_INPUT);
 
   /**/
   LL_GPIO_SetPinMode(MEMS_INT2_GPIO_Port, MEMS_INT2_Pin, LL_GPIO_MODE_INPUT);
+
+  /* EXTI interrupt init*/
+  NVIC_SetPriority(EXTI0_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_EnableIRQ(EXTI0_IRQn);
 
 }
 

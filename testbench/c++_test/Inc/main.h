@@ -23,15 +23,13 @@
 #ifndef __MAIN_H
 #define __MAIN_H
 
-/* Includes ------------------------------------------------------------------*/
-
-
 #include "fraaRTOS.h"
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Includes ------------------------------------------------------------------*/
 
 #include "stm32f4xx_ll_rcc.h"
 #include "stm32f4xx_ll_bus.h"
@@ -47,7 +45,6 @@ extern "C" {
 #if defined(USE_FULL_ASSERT)
 #include "stm32_assert.h"
 #endif /* USE_FULL_ASSERT */
-
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -89,8 +86,6 @@ void Error_Handler(void);
 #define PH1_OSC_OUT_GPIO_Port GPIOH
 #define OTG_FS_PowerSwitchOn_Pin LL_GPIO_PIN_0
 #define OTG_FS_PowerSwitchOn_GPIO_Port GPIOC
-#define B1_Pin LL_GPIO_PIN_0
-#define B1_GPIO_Port GPIOA
 #define I2S3_WS_Pin LL_GPIO_PIN_4
 #define I2S3_WS_GPIO_Port GPIOA
 #define SPI1_SCK_Pin LL_GPIO_PIN_5
@@ -160,7 +155,6 @@ void Error_Handler(void);
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif /* __MAIN_H */
 
