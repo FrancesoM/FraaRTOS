@@ -19,19 +19,24 @@ typedef enum {OS_HIGH_P, OS_LOW_O} OS_Priority_Type;
 typedef void (*OS_ThreadHandler)();
 typedef unsigned int* 	OS_StackPtr_Type; /*Must be word aligned*/ 
 //Then we need a type for a struct that keeps track of the stack pointer for each thread, to be expanded with other thread info
-typedef struct {
+// typedef struct {
+// 	OS_StackPtr_Type  NO_OPT	_sp;   //This must stay the first element in this struct for sched optimization
+// 	OS_State_Type	 NO_OPT	_state;
+// 	OS_Priority_Type NO_OPT _priority;
+// 	int  NO_OPT			_time_to_wake; //Need to be negative because of comparison if time has elapsed
+// 	int  NO_OPT		_time_at_wait;
+// 	/** more info later **/
+// } OS_Thread_Type;
+
+class OS_Thread_Type
+{
+public:
 	OS_StackPtr_Type  NO_OPT	_sp;   //This must stay the first element in this struct for sched optimization
 	OS_State_Type	 NO_OPT	_state;
 	OS_Priority_Type NO_OPT _priority;
 	int  NO_OPT			_time_to_wake; //Need to be negative because of comparison if time has elapsed
 	int  NO_OPT		_time_at_wait;
 	/** more info later **/
-} OS_Thread_Type;
-
-class Dummy
-{
-public:
-	bool SayHi(int x);
 };
 
 //Types to keep track active threads
