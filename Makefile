@@ -1,7 +1,7 @@
 OS_DIR := $(shell pwd)
 PROJ_NAME := $(shell grep -oP "(?<=TARGET = )\w+" testbench/wait_test/Makefile)
 
-test_list = wait_test 
+test_list = c++_test 
 
 #test all 
 test: 

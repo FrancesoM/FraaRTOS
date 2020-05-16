@@ -59,9 +59,15 @@ void OS_Wait(unsigned int ms);
 void OS_Sleep();
 void OS_Awake(int threadID);
 
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 //Interrupts 
 void PendSV_Handler(void);
 void SysTick_Handler(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //FRAARTOS_H
