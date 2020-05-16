@@ -38,44 +38,42 @@ void __attribute__((naked)) PendSV_Handler(void)
 			".global OS_ThreadIdx_Current\n\t"
 			".global OS_ThreadIdx_Next\n\t"
 			".global OS_FirstEntry\n\t"
-			".global OS_SizeOfThread_Type\n\t"
 
-			"ldr r1,=OS_FirstEntry 		\n\t"
-			//Load base address acrive threads
-			"ldr r2,=OS_ActiveThreads		\n\t" //OS_ActiveThreads
+			"ldr r1,=OS_FirstEntry 				\n\t"
 			//If first entry is true, restore context 
-			"ldr r1,[r1]\n\t" //r1 had the address of the variable
+			"ldr r1,[r1]						\n\t" //r1 had the address of the variable
 			"cbz r1, save_current_context		\n\t"
-			"restore_next_context:		\n\t"
-			"ldr r3,=OS_ThreadIdx_Next		\n\t" //r3 has the address of idx next
-			"ldr r3,[r3]\n\t"//r3 has the next index
-			"ldr r0,=OS_SizeOfThread_Type \n\t"  //r0 has the address of sizeof
-			"ldr r0,[r0]\n\t"
-			"mul r0,r3,r0	\n\t"
-			"ldr sp,[r2,r0]		\n\t" //$sp = OS_ActiveThreads[next].sp -->  = $sp = *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type)))
-			"pop {r4-r11}		\n\t" //restore reg for next thread
+			"restore_next_context:				\n\t"
+			"ldr r3,=OS_ThreadIdx_Next			\n\t" //r3 has address of OS_ThreadIdx_Next var
+			"ldr r2,=OS_ActiveThreads			\n\t" //r2 has address of OS_ActiveThreads variable
+			"ldr r3,[r3]						\n\t" //r3 has the next index
+			"lsls r3,r3,2 						\n\t" //we move always pointers so mul by 4 (32 bits) aka shift 2 left
+			//"ldr r2,[r2]						\n\t" //r2 has the base addresss of OS_ActiveThreads
+			"ldr r2,[r2,r3]    					\n\t" //r2 has the base address of the next thread
+			"ldr sp,[r2]						\n\t" //load the first byte which is always the first member of the class (hopefully)
+			"pop {r4-r11}						\n\t" //restore reg for next thread
 			//set first entry to 0
-			"mov r0,#0		\n\t"
-			"ldr r1,=OS_FirstEntry	\n\t" //r1 has the address of first entry
-			"str r0,[r1]		\n\t"   //Set first entry to zero
+			"mov r0,#0							\n\t"
+			"ldr r1,=OS_FirstEntry				\n\t" //r1 has the address of first entry
+			"str r0,[r1]						\n\t" //Set first entry to zero
 			//current = next
-			"ldr r1,=OS_ThreadIdx_Current\n\t"  //r1 has address of current thread
-			"str r3,[r1]		\n\t"
-			"cpsie i		\n\t"
-			"bx lr		\n\t"
-			"save_current_context:		\n\t"
-			"push {r4-r11}                          \n\t"
-			//pointer arithmetic, we move by "sizeof ThreadType at a time\n\t"
-			//with this mul we can increase the size of thread type without breaking this asm 
+			"ldr r1,=OS_ThreadIdx_Current		\n\t" //r1 has address of current thread
+			"lsrs r3,2							\n\t" //r3 has the shifted val but now must be shifted back to the "ptr C++ meaning"
+			"str r3,[r1]						\n\t"
+			"cpsie i							\n\t"
+			"bx lr								\n\t"
+			"save_current_context:				\n\t"
+			"push {r4-r11}                      \n\t"
 			//Now we can use whatever register we want
-			"ldr r3,=OS_ThreadIdx_Current\n\t" //@ of OS_ThreadIdx_Current
-			"ldr r3,[r3]\n\t"
-			"ldr r0,=OS_SizeOfThread_Type\n\t"  //r0 has the address of sizeof
-			"ldr r0,[r0]\n\t"
-			"mul r0,r3,r0\n\t" //OS_ThreadIdx_Current * sizeof(OS_Thread_Type)
+			"ldr r3,=OS_ThreadIdx_Current		\n\t" //@ of OS_ThreadIdx_Current
+			"ldr r3,[r3]						\n\t"
+			"lsls r3,r3,2						\n\t"
+			"ldr r2,=OS_ActiveThreads			\n\t" //r2 has address of OS_ActiveThreads variable
+			//"ldr r2,[r2]						\n\t" //r2 has the base addresss of OS_ActiveThreads
+			"ldr r2,[r2,r3]						\n\t" //r2 has address of the current thread
 			//This works because sp is the first member, so +0 from the base pointer
-			"str sp,[r2,r0]\n\t" //OS_ActiveThreads[OS_ThreadIdx_Current].sp = $sp --> *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type))) = $sp
-			"b restore_next_context\n\t"
+			"str sp,[r2]						\n\t" //OS_ActiveThreads[OS_ThreadIdx_Current].sp = $sp --> *(OS_ActiveThreads+(OS_ThreadIdx_Current * sizeof(OS_Thread_Type))) = $sp
+			"b restore_next_context				\n\t"
 			: 
 			: 
 			: );

@@ -30,25 +30,28 @@ typedef unsigned int* 	OS_StackPtr_Type; /*Must be word aligned*/
 
 class OS_Thread_Type
 {
+
 public:
-	OS_StackPtr_Type  NO_OPT	_sp;   //This must stay the first element in this struct for sched optimization
-	OS_State_Type	 NO_OPT	_state;
-	OS_Priority_Type NO_OPT _priority;
-	int  NO_OPT			_time_to_wake; //Need to be negative because of comparison if time has elapsed
-	int  NO_OPT		_time_at_wait;
+	OS_StackPtr_Type  	NO_OPT		_sp;   //This must stay the first element in this struct for sched optimization
+	OS_State_Type	 	NO_OPT		_state;
+	OS_Priority_Type 	NO_OPT 		_priority;
+	int  				NO_OPT		_time_to_wake; //Need to be negative because of comparison if time has elapsed
+	int  				NO_OPT		_time_at_wait;
+	//unsigned int 		NO_OPT 		_thread_stack[STACK_SIZE];
 	/** more info later **/
+
+	//We want to initialize the stack of our thread, so we pass the thread struct, the handler (to init PC) and the stack
+	//The stack must be allocated by the user in this early implementation
+	int OS_ThreadInit(  OS_ThreadHandler  		threadHandler ,
+						 OS_StackPtr_Type       threadStack,
+						 int               		threadStack_size);
+
 };
 
 //Types to keep track active threads
 typedef OS_Thread_Type* OS_ThreadPtr_Type;
 typedef int 			volatile OS_ThreadIdx_Type;
 
-//We want to initialize the stack of our thread, so we pass the thread struct, the handler (to init PC) and the stack
-//The stack must be allocated by the user in this early implementation
-int OS_ThreadInit(OS_ThreadHandler  		threadHandler,
-	               OS_StackPtr_Type  		threadStack, 
-	               int               		threadStack_size  
-	              );
 
 //Must be called after all thread init functions
 void OS_Start();

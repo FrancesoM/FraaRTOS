@@ -38,6 +38,7 @@ void thread1()
 
   }
 }
+OS_Thread_Type T1 = OS_Thread_Type();
 
 unsigned int thread2_stack[100];
 void thread2()
@@ -50,13 +51,15 @@ void thread2()
   }
 }
 
+OS_Thread_Type T2 = OS_Thread_Type();
+
 
 int main(void)
 {
 
   //Need to do them before Systick interrupt is enabled
-  thread1_ID = OS_ThreadInit(thread1,thread1_stack,40);
-  OS_ThreadInit(thread2,thread2_stack,40);
+  thread1_ID = T1.OS_ThreadInit(thread1,thread1_stack,40);
+  T2.OS_ThreadInit(thread2,thread2_stack,40);
   OS_Start();
 
   LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);

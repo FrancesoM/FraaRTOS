@@ -3,7 +3,7 @@
 /* GLOBAL VARIABLES USED BY THE OS */
 
 //Easy data structure - array - to keep track of the active threads
-OS_Thread_Type 	        OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
+OS_ThreadPtr_Type       OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this? 
 OS_ThreadIdx_Type   	OS_ThreadIdx_Current 			= 0	;
 OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
@@ -23,14 +23,14 @@ void OS_IdleThread()
   	//DO NOTHIGN AS IDLE
   }
 }
-
+OS_Thread_Type IDLE = OS_Thread_Type();
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
 //The returned value is for the user to refer to this thread in advance
-int OS_ThreadInit(OS_ThreadHandler  		threadHandler,
-	               OS_StackPtr_Type  		threadStack, 
-	               int               		threadStack_size
-	              )
+int OS_Thread_Type::OS_ThreadInit(  
+					OS_ThreadHandler  		threadHandler ,
+					OS_StackPtr_Type       	threadStack,
+					int               		threadStack_size)
 {
 	//Init stack pointer to the last element because it grows backwards
 	OS_StackPtr_Type sp = &(threadStack[0]) + threadStack_size;
@@ -57,17 +57,18 @@ int OS_ThreadInit(OS_ThreadHandler  		threadHandler,
     *(--sp) = 0x00000004U; /* R4 */
 
     //Set stack in the thread struct
-    OS_ActiveThreads[OS_ThreadIdx_Current]._sp = sp;
+    this->_sp = sp;
+    OS_ActiveThreads[OS_ThreadIdx_Current] = this;
     OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
     return OS_ThreadIdx_Current-1;
+};
 
-}
 
 void OS_Start()
 {
 	//Add the IDLE thread
-	OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
+	IDLE.OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
 	//The threadIdx is sitting at the next thread which doesn't exist, let's reset it
 	OS_ThreadIdx_Current = 0;
 	//Suggested by arm in case some external lib is changing the priority groups
@@ -79,7 +80,7 @@ void OS_Start()
 	//Set all threads to running
  	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
-		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
+		OS_Thread_Type* pcurrent = OS_ActiveThreads[i];
 		pcurrent->_state = OS_STATE_RUN;
 		pcurrent->_time_to_wake = 0;
 		pcurrent->_time_at_wait = 0;
@@ -96,7 +97,7 @@ void OS_Sched()
 	//The first step is then to update all the states
 	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
-		OS_Thread_Type* pcurrent = &(OS_ActiveThreads[i]);
+		OS_Thread_Type* pcurrent = OS_ActiveThreads[i];
 		
 		//If state is RUN no need to count elapsed, if state is SLEEP it won't be woken anyway
 		if( pcurrent->_state == OS_STATE_WAIT)
@@ -122,7 +123,7 @@ void OS_Sched()
 	//Iterate until find a thread that is in the run state, or until you circle to where the search began
 	while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
 	{
-		if( OS_ActiveThreads[OS_ThreadIdx_Next_Tentative]._state == OS_STATE_RUN )
+		if( OS_ActiveThreads[OS_ThreadIdx_Next_Tentative]->_state == OS_STATE_RUN )
 		{
 			//A candidate next thread has been found, set pendSV and break while
 			OS_ThreadIdx_Next 	=	OS_ThreadIdx_Next_Tentative;
@@ -148,7 +149,7 @@ void OS_Wait(unsigned int ms)
 	//on the current thread which called OS_Wait, otherwise everything is broken.
 	__disable_irq();
 	//Get current thread
-	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[OS_ThreadIdx_Current]);
+	OS_Thread_Type* pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
 	pcurrent->_time_to_wake = ms;
 	pcurrent->_time_at_wait = OS_gTime;
 	pcurrent->_state = OS_STATE_WAIT;
@@ -166,7 +167,7 @@ void OS_Sleep()
 	//on the current thread which called OS_Wait, otherwise everything is broken.
 	__disable_irq();
 	//Get current thread
-	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[OS_ThreadIdx_Current]);
+	OS_Thread_Type* pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
 	pcurrent->_state = OS_STATE_SLEEP;
 	__enable_irq();
 	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
@@ -178,7 +179,7 @@ void OS_Awake(int threadID)
 {
 	__disable_irq();
 	//Get current thread
-	OS_Thread_Type* pcurrent = &(OS_ActiveThreads[threadID]);
+	OS_Thread_Type* pcurrent = OS_ActiveThreads[threadID];
 	pcurrent->_state = OS_STATE_RUN;
 	__enable_irq();
 	//OS_Sched();

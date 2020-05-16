@@ -1,33 +1,7 @@
 set pagination off
-set logging file gdb.output
-set logging on
 
-set $var = 0
-
-file build/wait_test.elf
+file build/c++_test.elf
 tar extended-remote :4242
 
-br main.c:35 if $var++ < 10
-	command 1
-	echo "Thread 1"
-	print OS_gTime
-	continue
-end
 
-br main.c:35 if $var > 9
-	command 2
-	set loggin off
-	finish
-	disconnect
-	quit
-end
-
-br main.c:44 if $var++ < 10
-	command 3
-	echo "Thread 2"
-	print OS_gTime
-	continue
-end
-
-r
 
