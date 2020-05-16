@@ -1,11 +1,6 @@
-#include "data_structure.h"
+#include "fraaRTOS.h"
 
-class Task
+bool Dummy::SayHi(int x)
 {
-
-
-	bool b_HasWaited()
-	{
-		return 0;
-	}
-};
+	return x>0;
+}

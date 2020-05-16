@@ -28,6 +28,12 @@ typedef struct {
 	/** more info later **/
 } OS_Thread_Type;
 
+class Dummy
+{
+public:
+	bool SayHi(int x);
+};
+
 //Types to keep track active threads
 typedef OS_Thread_Type* OS_ThreadPtr_Type;
 typedef int 			volatile OS_ThreadIdx_Type;

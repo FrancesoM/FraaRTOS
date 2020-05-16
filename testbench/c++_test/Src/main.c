@@ -56,10 +56,15 @@ void thread2()
 int main(void)
 {
 
+  int volatile a;
+
   //Need to do them before Systick interrupt is enabled
   OS_ThreadInit(thread1,thread1_stack,40);
   OS_ThreadInit(thread2,thread2_stack,40);
   OS_Start();
+
+  Dummy X = Dummy();
+  X.SayHi(a);
 
   LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);

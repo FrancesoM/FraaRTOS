@@ -44,7 +44,8 @@ Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_utils.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_exti.c \
 Src/system_stm32f4xx.c  \
 ${FRAARTOS_DIR}/Src/fraaRTOS.c  \
-${FRAARTOS_DIR}/Src/arch_stm32f4.c 
+${FRAARTOS_DIR}/Src/arch_stm32f4.c \
+${FRAARTOS_DIR}/Src/data_structure.c 
 
 
 # ASM sources
