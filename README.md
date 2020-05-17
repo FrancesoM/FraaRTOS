@@ -45,3 +45,8 @@ To see the disassemble you can use objump and to check symbols you can use eithe
 arm-none-eabi-objdump -d build/fraaRTOS.o #disassemble
 arm-none-eabi-objdump -x build/fraaRTOS.o #see symbols
 ```
+
+A wonderful explanation on how libc_init_array in the startup code handles static constructors is given here:
+```
+https://stackoverflow.com/questions/15265295/understanding-the-libc-init-array
+```

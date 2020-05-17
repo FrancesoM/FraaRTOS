@@ -37,14 +37,15 @@ public:
 	OS_Priority_Type 	NO_OPT 		_priority;
 	int  				NO_OPT		_time_to_wake; //Need to be negative because of comparison if time has elapsed
 	int  				NO_OPT		_time_at_wait;
+	int 				NO_OPT		_threadID;
 	//unsigned int 		NO_OPT 		_thread_stack[STACK_SIZE];
 	/** more info later **/
 
 	//We want to initialize the stack of our thread, so we pass the thread struct, the handler (to init PC) and the stack
 	//The stack must be allocated by the user in this early implementation
-	int OS_ThreadInit(  OS_ThreadHandler  		threadHandler ,
-						 OS_StackPtr_Type       threadStack,
-						 int               		threadStack_size);
+	OS_Thread_Type(  OS_ThreadHandler  		threadHandler ,
+					 OS_StackPtr_Type       threadStack,
+					 int               		threadStack_size);
 
 };
 

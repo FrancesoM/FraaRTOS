@@ -9,7 +9,6 @@ OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
 int		  	 NO_OPT		OS_FirstEntry					= 1 ;
 unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
-const int    NO_OPT     OS_SizeOfThread_Type = sizeof(OS_Thread_Type);
 
 //Used for deciding for how long a thread should run
 int NO_OPT 				OS_T_StartSlice 					= 0;
@@ -23,11 +22,11 @@ void OS_IdleThread()
   	//DO NOTHIGN AS IDLE
   }
 }
-OS_Thread_Type IDLE = OS_Thread_Type();
+OS_Thread_Type IDLE = OS_Thread_Type(OS_IdleThread,OS_IdleStack,100);
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
 //The returned value is for the user to refer to this thread in advance
-int OS_Thread_Type::OS_ThreadInit(  
+OS_Thread_Type::OS_Thread_Type(  
 					OS_ThreadHandler  		threadHandler ,
 					OS_StackPtr_Type       	threadStack,
 					int               		threadStack_size)
@@ -59,16 +58,16 @@ int OS_Thread_Type::OS_ThreadInit(
     //Set stack in the thread struct
     this->_sp = sp;
     OS_ActiveThreads[OS_ThreadIdx_Current] = this;
+    this->_threadID = OS_ThreadIdx_Current;
     OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
-    return OS_ThreadIdx_Current-1;
 };
 
 
 void OS_Start()
 {
 	//Add the IDLE thread
-	IDLE.OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
+	//IDLE.OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
 	//The threadIdx is sitting at the next thread which doesn't exist, let's reset it
 	OS_ThreadIdx_Current = 0;
 	//Suggested by arm in case some external lib is changing the priority groups
@@ -80,7 +79,7 @@ void OS_Start()
 	//Set all threads to running
  	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
-		OS_Thread_Type* pcurrent = OS_ActiveThreads[i];
+		auto pcurrent = OS_ActiveThreads[i];
 		pcurrent->_state = OS_STATE_RUN;
 		pcurrent->_time_to_wake = 0;
 		pcurrent->_time_at_wait = 0;
@@ -97,7 +96,7 @@ void OS_Sched()
 	//The first step is then to update all the states
 	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
-		OS_Thread_Type* pcurrent = OS_ActiveThreads[i];
+		auto pcurrent = OS_ActiveThreads[i];
 		
 		//If state is RUN no need to count elapsed, if state is SLEEP it won't be woken anyway
 		if( pcurrent->_state == OS_STATE_WAIT)
@@ -149,7 +148,7 @@ void OS_Wait(unsigned int ms)
 	//on the current thread which called OS_Wait, otherwise everything is broken.
 	__disable_irq();
 	//Get current thread
-	OS_Thread_Type* pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
+	auto pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
 	pcurrent->_time_to_wake = ms;
 	pcurrent->_time_at_wait = OS_gTime;
 	pcurrent->_state = OS_STATE_WAIT;
@@ -167,7 +166,7 @@ void OS_Sleep()
 	//on the current thread which called OS_Wait, otherwise everything is broken.
 	__disable_irq();
 	//Get current thread
-	OS_Thread_Type* pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
+	auto pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
 	pcurrent->_state = OS_STATE_SLEEP;
 	__enable_irq();
 	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
@@ -179,7 +178,7 @@ void OS_Awake(int threadID)
 {
 	__disable_irq();
 	//Get current thread
-	OS_Thread_Type* pcurrent = OS_ActiveThreads[threadID];
+	auto pcurrent = OS_ActiveThreads[threadID];
 	pcurrent->_state = OS_STATE_RUN;
 	__enable_irq();
 	//OS_Sched();
