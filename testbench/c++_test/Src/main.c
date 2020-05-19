@@ -24,44 +24,90 @@
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 
+//Warning stack size will be duplicated
+class myOS: public OS
+{
+    inline void OS_SchedAlgo()
+    {  
+      //The second step is to update the current thread. 
+      //Update current thread, which is what was next before. Then choose what goes next.
+
+      //OS_ThreadIdx_Current=OS_ThreadIdx_Next;
+      OS_ThreadIdx_Type OS_BeginIdx               = OS::OS_GetCurrentPointer();
+      OS_ThreadIdx_Type OS_ThreadIdx_Next_Tentative = (OS::OS_GetCurrentPointer() + 1) % OS::OS_GetThreadCnt();
+
+      //Iterate until find a thread that is in the run state, or until you circle to where the search began
+      while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
+      {
+        if( OS_GetThreadBasePtr(OS_ThreadIdx_Next_Tentative)->_state == OS_STATE_RUN )
+        {
+          //A candidate next thread has been found, set pendSV and break while
+          OS::OS_SetNextPointer(OS_ThreadIdx_Next_Tentative);
+          SCB->ICSR       |= SCB_ICSR_PENDSVSET_Msk;
+          break;
+        }
+        else
+        {
+          //Just try the next one
+          OS_ThreadIdx_Next_Tentative = (OS_ThreadIdx_Next_Tentative + 1) % OS::OS_GetThreadCnt();
+        }
+      }
+    };
+};
+
+auto x = myOS();
+
 //Define my threads
 int volatile thread1_ID;
-unsigned int thread1_stack[100];
 void thread1()
 {
   while(1)
   {
 
     LL_GPIO_TogglePin(LD3_GPIO_Port,LD3_Pin);
-    OS_Sleep();
-  
+    ptr_rtti_OS->OS_Sleep();
 
   }
 }
-auto T1 = OS_Thread_Type(thread1,thread1_stack,40);
+auto T1 = OS_Thread_Type(thread1,40);
 
-unsigned int thread2_stack[100];
 void thread2()
 {
   while(1)
   {
     LL_GPIO_TogglePin(LD4_GPIO_Port,LD4_Pin);
-    //for(int i = 0; i < 5000000; i++){};
-    OS_Wait(1000);
+    ptr_rtti_OS->OS_Wait(500);
   }
 }
+auto T2 = OS_Thread_Type(thread2,40);
 
-auto T2 = OS_Thread_Type(thread2,thread2_stack,40);
-
+void thread3()
+{
+  while(1)
+  {
+    LL_GPIO_TogglePin(LD5_GPIO_Port,LD5_Pin);
+    ptr_rtti_OS->OS_Wait(1000);
+  }
+}
+auto T3 = OS_Thread_Type(thread3,40);
 
 int main(void)
 {
 
+  ptr_rtti_OS = &x;
+
   //Need to do them before Systick interrupt is enabled
-  //thread1_ID = T1.OS_ThreadInit(thread1,thread1_stack,40);
-  //T2.OS_ThreadInit(thread2,thread2_stack,40);
+  
+  //Register threads in the OS
+  ptr_rtti_OS->OS_RegisterThread(&T1);
+  ptr_rtti_OS->OS_RegisterThread(&T2);
+  ptr_rtti_OS->OS_RegisterThread(&T3);
+
+  //Get ID because needed by application
   thread1_ID = T1._threadID;
-  OS_Start();
+
+  //Start OS - and Systick
+  ptr_rtti_OS->OS_Start();
 
   LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
   LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
@@ -119,7 +165,7 @@ void SystemClock_Config(void)
   
   }
 
-  OS_SetTimeResoltion(1000);
+  ptr_rtti_OS->OS_SetTimeResoltion(1000);
 
 
 }

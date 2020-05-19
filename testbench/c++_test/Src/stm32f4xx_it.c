@@ -193,7 +193,7 @@ void EXTI0_IRQHandler(void)
     LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_0);
 
   }
-  OS_Awake(thread1_ID);
+  ptr_rtti_OS->OS_Awake(thread1_ID);
 }
 
 /* USER CODE BEGIN 1 */

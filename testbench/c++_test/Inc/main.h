@@ -25,6 +25,8 @@
 
 #include "fraaRTOS.h"
 
+extern OS* ptr_rtti_OS;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
