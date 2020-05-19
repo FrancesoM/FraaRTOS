@@ -2,7 +2,9 @@
 
 extern int NO_OPT 				OS_T_StartSlice 			;
 extern int NO_OPT 				OS_SliceDuration			;
-extern unsigned int NO_OPT     OS_gTime						;
+extern unsigned int NO_OPT     	OS_gTime					;
+
+extern OS* ptr_rtti_OS;
 
 void SysTick_Handler(void)
 {
@@ -12,7 +14,7 @@ void SysTick_Handler(void)
 	if( OS_gTime - OS_T_StartSlice >= OS_SliceDuration )
 	{
 		OS_T_StartSlice = OS_gTime;
-		OS_Sched();
+		ptr_rtti_OS->OS_Sched();
 	}
 	
 }

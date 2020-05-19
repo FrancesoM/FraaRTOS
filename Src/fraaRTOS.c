@@ -10,11 +10,13 @@ OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
 int		  	 NO_OPT		OS_FirstEntry					= 1 ;
 unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
 
+auto default_OS = OS();
+OS* ptr_rtti_OS = &default_OS;
+
 //Used for deciding for how long a thread should run
 int NO_OPT 				OS_T_StartSlice 					= 0;
 int NO_OPT 				OS_SliceDuration				   ;
 
-unsigned int OS_IdleStack[20];
 void OS_IdleThread()
 {
   while(1)
@@ -22,23 +24,54 @@ void OS_IdleThread()
   	//DO NOTHIGN AS IDLE
   }
 }
-OS_Thread_Type IDLE = OS_Thread_Type(OS_IdleThread,OS_IdleStack,100);
+OS_Thread_Type IDLE = OS_Thread_Type(OS_IdleThread,20);
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
 //The returned value is for the user to refer to this thread in advance
 OS_Thread_Type::OS_Thread_Type(  
 					OS_ThreadHandler  		threadHandler ,
-					OS_StackPtr_Type       	threadStack,
 					int               		threadStack_size)
 {
+
+	this->_thread_stack_size = threadStack_size;
+	this->_threadHandler = threadHandler;
+};
+
+//OS constructor - init the stack counter to last element because stack grows backwards
+OS::OS(): _stack_counter(TOTAL_STACK) 
+{
+	//Reset active thread count
+	OS_ThreadIdx_Current = 0;
+    OS_ThreadCnt = 0;
+	OS_RegisterThread(&IDLE); 
+};
+
+//Set the stack thread as pointer to internal vector - this is also useful 
+//Implementation detail, it would be great to pass pThread as reference but we can't as we need the address
+//of a global objeect
+int OS::OS_RegisterThread(OS_Thread_Type* pThread)
+{
 	//Init stack pointer to the last element because it grows backwards
-	OS_StackPtr_Type sp = &(threadStack[0]) + threadStack_size;
-	OS_StackPtr_Type sp_limit = &(threadStack[0]) - 1;
+	OS_StackPtr_Type sp = &(this->_total_stack[this->_stack_counter - 1]);
+
+	int lower_limit = this->_stack_counter - pThread->_thread_stack_size;
+
+	if (lower_limit < 0)
+	{
+		//Return the amount of bytes that are exceeding the stack size
+		return lower_limit;
+	}
+
+	//The limit is the current point minus the thread stack size
+	OS_StackPtr_Type sp_limit = &(this->_total_stack[lower_limit]);
+
+	//Update then the OS stack counter to be correct at the next thread registration into the OS
+	this->_stack_counter = lower_limit;
 
 	//TODO: stack must account for floating point unit - calling convention
 	//Init a stack frame
 	*(--sp) = (1U << 24);  /* xPSR */
-    *(--sp) = (unsigned int)threadHandler; /* PC */
+    *(--sp) = (unsigned int)pThread->_threadHandler; /* PC */
     *(--sp) = 0x0000000EU; /* LR  */
     *(--sp) = 0x0000000CU; /* R12 */
     *(--sp) = 0x00000003U; /* R3  */
@@ -55,16 +88,21 @@ OS_Thread_Type::OS_Thread_Type(
     *(--sp) = 0x00000005U; /* R5 */
     *(--sp) = 0x00000004U; /* R4 */
 
-    //Set stack in the thread struct
-    this->_sp = sp;
-    OS_ActiveThreads[OS_ThreadIdx_Current] = this;
-    this->_threadID = OS_ThreadIdx_Current;
+    //Set stack in the thread struct - remember this is fundamental for the ASM to work 
+    pThread->_sp = sp;
+
+    //Set variables 
+	OS_ActiveThreads[OS_ThreadIdx_Current] = pThread;
+    pThread->_threadID = OS_ThreadIdx_Current;
     OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
+
+    return 0;
+
 };
 
 
-void OS_Start()
+void OS::OS_Start()
 {
 	//Add the IDLE thread
 	//IDLE.OS_ThreadInit(OS_IdleThread,OS_IdleStack,100);
@@ -86,7 +124,7 @@ void OS_Start()
 	}   
 }
 
-void OS_Sched()
+void OS::OS_Sched()
 {
 	//Do the scheduling algorithm here 
 	
@@ -94,6 +132,66 @@ void OS_Sched()
 	//Scheduling step has to take into consideration the state of the threads, if on wait, don't bother scheduling
 
 	//The first step is then to update all the states
+	OS_Update_Threads();
+
+	OS_SchedAlgo();
+
+	__enable_irq();
+
+    //__NVIC_SetPendingIRQ(PendSV_IRQn); must do it manually if irq number is negative
+    
+    
+}
+
+inline void OS::OS_SchedAlgo()
+{
+	//The second step is to update the current thread. 
+	//Update current thread, which is what was next before. Then choose what goes next.
+
+	//OS_ThreadIdx_Current=OS_ThreadIdx_Next;
+	OS_ThreadIdx_Type OS_BeginIdx          			= OS_GetCurrentPointer();
+	OS_ThreadIdx_Type OS_ThreadIdx_Next_Tentative	= (OS_GetCurrentPointer() + 1) % OS_GetThreadCnt();
+
+	//Iterate until find a thread that is in the run state, or until you circle to where the search began
+	while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
+	{
+		if( OS_GetThreadBasePtr(OS_ThreadIdx_Next_Tentative)->_state == OS_STATE_RUN )
+		{
+			//A candidate next thread has been found, set pendSV and break while
+			OS_SetNextPointer(OS_ThreadIdx_Next_Tentative);
+			SCB->ICSR 			|= SCB_ICSR_PENDSVSET_Msk;
+			break;
+		}
+		else
+		{
+			//Just try the next one
+			OS_ThreadIdx_Next_Tentative = (OS_ThreadIdx_Next_Tentative + 1) % OS_GetThreadCnt();
+		}
+	}
+}
+
+OS_ThreadIdx_Type OS::OS_GetThreadCnt()
+{
+	return OS_ThreadCnt;
+}
+
+OS_ThreadPtr_Type OS::OS_GetThreadBasePtr(OS_ThreadIdx_Type idx)
+{
+	return OS_ActiveThreads[idx];
+}
+
+OS_ThreadIdx_Type OS::OS_GetCurrentPointer()
+{
+	return OS_ThreadIdx_Current;
+}
+
+void OS::OS_SetNextPointer(OS_ThreadIdx_Type next)
+{
+	OS_ThreadIdx_Next = next;
+}
+
+void OS::OS_Update_Threads()
+{
 	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
 		auto pcurrent = OS_ActiveThreads[i];
@@ -110,39 +208,9 @@ void OS_Sched()
 		}
 
 	}
-
-
-	//The second step is to update the current thread. 
-	//Update current thread, which is what was next before. Then choose what goes next.
-
-	//OS_ThreadIdx_Current=OS_ThreadIdx_Next;
-	OS_ThreadIdx_Type OS_BeginIdx          			= OS_ThreadIdx_Current;
-	OS_ThreadIdx_Type OS_ThreadIdx_Next_Tentative	= (OS_ThreadIdx_Current + 1) % OS_ThreadCnt;
-
-	//Iterate until find a thread that is in the run state, or until you circle to where the search began
-	while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
-	{
-		if( OS_ActiveThreads[OS_ThreadIdx_Next_Tentative]->_state == OS_STATE_RUN )
-		{
-			//A candidate next thread has been found, set pendSV and break while
-			OS_ThreadIdx_Next 	=	OS_ThreadIdx_Next_Tentative;
-			SCB->ICSR 			|= SCB_ICSR_PENDSVSET_Msk;
-			break;
-		}
-		else
-		{
-			//Just try the next one
-			OS_ThreadIdx_Next_Tentative = (OS_ThreadIdx_Next_Tentative + 1) % OS_ThreadCnt;
-		}
-	}
-	__enable_irq();
-
-    //__NVIC_SetPendingIRQ(PendSV_IRQn); must do it manually if irq number is negative
-    
-    
 }
 
-void OS_Wait(unsigned int ms)
+void OS::OS_Wait(unsigned int ms)
 {
 	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
 	//on the current thread which called OS_Wait, otherwise everything is broken.
@@ -160,7 +228,7 @@ void OS_Wait(unsigned int ms)
 	OS_Sched();
 }
 
-void OS_Sleep()
+void OS::OS_Sleep()
 {
 	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
 	//on the current thread which called OS_Wait, otherwise everything is broken.
@@ -174,7 +242,7 @@ void OS_Sleep()
 }
 
 //How does the user get the thread ID? 
-void OS_Awake(int threadID)
+void OS::OS_Awake(int threadID)
 {
 	__disable_irq();
 	//Get current thread
@@ -184,7 +252,7 @@ void OS_Awake(int threadID)
 	//OS_Sched();
 }
 
-int OS_SetTimeResoltion(unsigned int u32us)
+int OS::OS_SetTimeResoltion(unsigned int u32us)
 {
 
 
@@ -232,7 +300,7 @@ int OS_SetTimeResoltion(unsigned int u32us)
 	return 0;
 }
 
-void OS_SetTimeSlice(uint32_t u32n_baseTicks)
+void OS::OS_SetTimeSlice(uint32_t u32n_baseTicks)
 {
 	OS_SliceDuration = u32n_baseTicks;
 }
