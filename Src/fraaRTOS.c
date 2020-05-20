@@ -40,7 +40,8 @@ OS_Thread_Type::OS_Thread_Type(
 //OS constructor - init the stack counter to last element because stack grows backwards
 OS::OS(): _stack_counter(TOTAL_STACK) 
 {
-	//Reset active thread count
+	//Reset active thread count - useful when class is reimplemented 
+	//TODO: find a better way to fix this, like registering IDLE in the OS Start maybe?
 	OS_ThreadIdx_Current = 0;
     OS_ThreadCnt = 0;
 	OS_RegisterThread(&IDLE); 
