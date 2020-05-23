@@ -1,0 +1,13 @@
+This is nothing more than a templated implementation of a double linked list.
+
+The peculiarity is that the type T needs to support
+	- next and prev public variables
+	- status (true, false) as per active, wait
+
+
+This is thought to support 2 linked lists in a single implementation. 
+
+As long as the user specifies the head, the user can move nodes between the active and wait list.
+This clearly is done to support run and wait queue in the OS. 
+
+A graphical implementation on how to insert nodes and how to move them around is in the draw.io file
