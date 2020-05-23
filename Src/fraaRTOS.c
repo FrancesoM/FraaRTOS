@@ -7,9 +7,9 @@ OS_Thread_Type 	        OS_ActiveThreads[NTHREAD_LIMIT]		; //How to init this?
 OS_ThreadIdx_Type   	OS_ThreadIdx_Current 			= 0	;
 OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
-int		  NO_OPT		OS_FirstEntry					= 1 ;
+int		     NO_OPT		OS_FirstEntry					= 1 ;
 unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
-const int   OS_SizeOfThread_Type = sizeof(OS_Thread_Type);
+const int    NO_OPT     OS_SizeOfThread_Type = sizeof(OS_Thread_Type);
 
 //Used for deciding for how long a thread should run
 int NO_OPT 				OS_T_StartSlice 					= 0;
