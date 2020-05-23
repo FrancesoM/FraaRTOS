@@ -167,11 +167,10 @@ void DebugMon_Handler(void)
 /**
   * @brief This function handles System tick timer.
   */
-//void SysTick_Handler(void)
-//{
-  //LL_GPIO_TogglePin(GPIOD,LL_GPIO_PIN_15);
-  //OS_Sched();
-//}
+void SysTick_Handler(void)
+{
+  xos.OS_Advance();
+}
 
 /******************************************************************************/
 /* STM32F4xx Peripheral Interrupt Handlers                                    */
@@ -193,7 +192,7 @@ void EXTI0_IRQHandler(void)
     LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_0);
 
   }
-  ptr_rtti_OS->OS_Awake(thread1_ID);
+  xos.OS_Awake(thread1_ID);
 }
 
 /* USER CODE BEGIN 1 */

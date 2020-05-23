@@ -1,5 +1,5 @@
-#ifndef DATASTRUCTURES_H
-#define DATASTRUCTURES_H
+#ifndef DLINKED_LIST_H
+#define DLINKED_LIST_H
 
 #ifdef __STDOUT
 #include <iostream>
@@ -99,4 +99,4 @@ void printLists(T* head, char const* msg)
 
 
 
-#endif //DATASTRUCTURES_H
+#endif //DLINKED_LIST_H
