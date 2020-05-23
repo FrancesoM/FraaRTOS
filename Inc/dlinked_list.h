@@ -5,9 +5,17 @@
 #include <iostream>
 #endif
 
-//The only requirement for T is that it must have next and prev variables
-template<typename T>
-void insertActive(T *n, T* head)
+
+/**
+ * @brief Insert a fresh node in the list, given the head node. 
+ * @details The head node is defined by the user and will be used to navigate the list
+ * 
+ * @param n Pointer to the node to add
+ * @param head Pointer to the head node
+ * @param status Status of the node to be initialized at
+ */
+template<typename T, typename STATUS>
+void vInsertInList(T *n, T* head, STATUS s)
 {
 	/*
 	IDLE.next.prev = new (a,d)
@@ -19,10 +27,21 @@ void insertActive(T *n, T* head)
 	n->next = head->next;
 	head->next = n;
 	n->prev = head;
+
+	n->_state = s;
 }
 
-template<typename T>
-void setActive(T* n, T* head)
+/**
+ * @brief Update an existing node in the list.
+ * @details Removing and adding all the necessary references to reroute the list is done here.
+ * 			The destination list is the one that starts at param head. The status will be updated.
+ * 
+ * @param n Pointer to the node to update
+ * @param head Pointer to the head of the list
+ * @param s Status to be updated
+ */
+template<typename T, typename STATUS>
+void vUpdateInList(T* n, T* head, STATUS s)
 {
 
 	/*
@@ -38,10 +57,10 @@ void setActive(T* n, T* head)
 		this.prev = IDLE (e,b)
 	*/
 
-	//Don't add if already active
-	if( n->status != true)
+	//Don't add if already in such status
+	if( n->_state != s)
 	{
-		n->setStatus(true);
+		n->_state = s;
 
 		n->prev->next = n->next;
 		n->next->prev = n->prev;
@@ -54,24 +73,6 @@ void setActive(T* n, T* head)
 	}
 
 
-}
-
-template<typename T>
-void setWait(T* n, T* head)
-{
-	if( n->status != false)
-	{
-		n->setStatus(false);
-
-		n->prev->next = n->next;
-		n->next->prev = n->prev;
-
-		head->next->prev = n;
-
-		n->next = head->next;
-		head->next = n;
-		n->prev = head;
-	}
 }
 
 #ifdef __STDOUT
