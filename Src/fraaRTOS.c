@@ -8,14 +8,7 @@ OS_ThreadIdx_Type   	OS_ThreadIdx_Current 			= 0	;
 OS_ThreadIdx_Type   	OS_ThreadIdx_Next				= 0	;
 OS_ThreadIdx_Type   	OS_ThreadCnt 					= 0	;
 int		  	 NO_OPT		OS_FirstEntry					= 1 ;
-unsigned int NO_OPT     OS_gTime						= 0 ; 	  //Keep track of ms
 
-auto default_OS = OS();
-OS* ptr_rtti_OS = &default_OS;
-
-//Used for deciding for how long a thread should run
-int NO_OPT 				OS_T_StartSlice 					= 0;
-int NO_OPT 				OS_SliceDuration				   ;
 
 void OS_IdleThread()
 {
@@ -42,8 +35,13 @@ OS::OS(): _stack_counter(TOTAL_STACK)
 {
 	//Reset active thread count - useful when class is reimplemented 
 	//TODO: find a better way to fix this, like registering IDLE in the OS Start maybe?
+	
+	//Reset global variables
 	OS_ThreadIdx_Current = 0;
     OS_ThreadCnt = 0;
+
+    //Initialize internal variables
+    this->OS_gTime = 0;
 	OS_RegisterThread(&IDLE); 
 };
 
@@ -102,6 +100,19 @@ int OS::OS_RegisterThread(OS_Thread_Type* pThread)
 
 };
 
+
+void OS::OS_Advance()
+{
+	#warning "Fix this because it will overflow "
+	this->OS_gTime++; 
+
+	//OS_StartSlive starts at 0
+	if( this->OS_gTime - this->OS_T_StartSlice >= this->OS_SliceDuration )
+	{
+		this->OS_T_StartSlice = this->OS_gTime;
+		this->OS_Sched();
+	}
+}
 
 void OS::OS_Start()
 {
@@ -296,13 +307,13 @@ int OS::OS_SetTimeResoltion(unsigned int u32us)
 	LL_SYSTICK_EnableIT();
 
 	//Set a default  duration for the time slice of 10 "base units"
-	OS_SliceDuration = 10;
+	this->OS_SliceDuration = 10;
 
 	return 0;
 }
 
 void OS::OS_SetTimeSlice(uint32_t u32n_baseTicks)
 {
-	OS_SliceDuration = u32n_baseTicks;
+	this->OS_SliceDuration = u32n_baseTicks;
 }
 

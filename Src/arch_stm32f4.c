@@ -2,22 +2,6 @@
 
 extern int NO_OPT 				OS_T_StartSlice 			;
 extern int NO_OPT 				OS_SliceDuration			;
-extern unsigned int NO_OPT     	OS_gTime					;
-
-extern OS* ptr_rtti_OS;
-
-void SysTick_Handler(void)
-{
-	OS_gTime++; //WARN: this will overflow
-
-	//OS_StartSlive starts at 0
-	if( OS_gTime - OS_T_StartSlice >= OS_SliceDuration )
-	{
-		OS_T_StartSlice = OS_gTime;
-		ptr_rtti_OS->OS_Sched();
-	}
-	
-}
 
 void __attribute__((naked)) PendSV_Handler(void)
 {

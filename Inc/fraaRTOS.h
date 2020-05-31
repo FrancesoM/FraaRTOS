@@ -42,6 +42,10 @@ public:
 	int 				NO_OPT		_threadID;
 	unsigned int 		NO_OPT 		_thread_stack_size;
 	OS_ThreadHandler  	NO_OPT		_threadHandler;
+
+	//Variables used for linked list
+	OS_Thread_Type*   NO_OPT		next;
+	OS_Thread_Type*   NO_OPT		prev;
 	/** more info later **/
 
 	//Set some variables needed when we want to register the thread
@@ -61,8 +65,14 @@ private:
 	//They will never cross and they won't know they are in the same array 
 	//The guard is ensured by checks on ptr arithmetic 
 	unsigned int _total_stack[TOTAL_STACK];
-	// This is an index that keeps track on where we are for the next stack initialization
+	//This is an index that keeps track on where we are for the next stack initialization
 	unsigned int _stack_counter;
+	//This keeps track internally of the OS time that has passed
+	unsigned int NO_OPT     OS_gTime;
+
+	//Used for deciding for how long a thread should run
+	int NO_OPT 				OS_T_StartSlice;
+	int NO_OPT 				OS_SliceDuration;
 
 public:
 
@@ -86,6 +96,8 @@ public:
 	void OS_SetTimeSlice(uint32_t u32n_baseTicks);
 
 
+	void OS_Advance();
+
 	//Critical code, if need to switch threads this function changes the registers 
     void OS_Sched();
 	void OS_Wait(unsigned int ms);
@@ -108,7 +120,6 @@ extern "C" {
 #endif
 //Interrupts 
 void PendSV_Handler(void);
-void SysTick_Handler(void);
 
 #ifdef __cplusplus
 }

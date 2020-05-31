@@ -1,0 +1,53 @@
+In moving to C++ I had some design patterns in mind:
+
+- The user must instantiate a global OS object, where the class is provided by fraaRTOS lib
+- The class can be templated, to accomodate user needs
+	- the size of the stack 
+	- the structure of the thread object 
+	- the schdeduler policy
+	- the underlying datastructures 
+- The thread type is an object, but of POD type, and not virtual functions, as its memory layout must be accessible through the scheduler asm context switch. 
+
+- The libraries won't instantiate any OS global object, the user will. As such, the user will have to create a periodic ISR where they will call UserOSObject.OS_Schedule()
+
+- The number of global variables must be kept at minimum and if possibly the user must not access them. 
+
+
+! Mind that considerations about time complexity here are a little overkill as I don't imagine this OS to support hundreds of threads. Maybe what's more important is to optimize for size as we are in an embedded system. 
+
+- There are three data structures to adavance the stat of the OS
+
+	- Run-queue:
+		- Contains the threads that wants to run but need to compete with others (as only one can run at a time)
+		- Possible insertion/deletion at any time as threads can be woken up or put to sleep/wait
+		- The choice on which one gets to be run is done at runtime through scheduler policy
+		- Operations hence are: scan, get highest priority, insert/remove
+
+		- A max-heap to implement the run-queue ?
+			- The sort methodology depends on the scheduler policy (RM, DM, EDF etc..)
+			- First element after insertion is always the one that must be scheduled O(1)
+			- Has a smaller size overhead as can be implemented as an array with fixed indexing for parent/children
+			- Each time list is modified needs to be max-heapified
+
+		- A linked list to implement the run-queue ? 
+			- Insertion/deletion O(1) operations
+			- Get highest priority O(n) scanning 
+
+	- Wait queue:
+		- All the threads that are not run and are pending 
+		
+		- A linked list for the wait queue:
+			- Better than an array because we will never access an element by indexing so O(1) indexing is irrelevant
+			- Easier to scan, O(1) insertion and deletion with respect to O(n) 
+			- The wait queue will always be scanned from start to end and the threads ready will be deleted and moved to the run_queue. On the other hand the active threads that are sleeping/waiting will be inserted in the wait queue. 
+
+	- The threads objects must be global and the context switch needs to access an array containing their references 
+
+
+	- Final decision is to provide each thread object with a "next" and "prev" variables and use the linked list on top of that. With this idea we can have the array with current/next pointer and two linked lists for the wait and run queue. All in the same data structure!
+
+
+- Reasons for having the context switch in asm 
+	- naked function (if not, the pushed registers at the beginning don't belong the the thread at function exit, you would mess up registers)
+	- I don't want this function to rely on the OS class, 
+
