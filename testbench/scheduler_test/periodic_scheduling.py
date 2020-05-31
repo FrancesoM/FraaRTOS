@@ -4,7 +4,6 @@
 from IPython import get_ipython
 get_ipython().run_line_magic('matplotlib', 'qt')
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
@@ -130,10 +129,50 @@ use a modified RM U_lub and say that a schedule is feasible if:
     
                         U_lub = sum(Ci/Di) (note that Ti is substituted by Di)
 
-But this would give a pessimistic estimation. We can have a better estimation noticing the following:
+But this would give a pessimistic estimation. We can have a better estimation by calculating the interference under a 
+task is subject to. Assuming tasks are ordered in increasing priority:
     
-- 
+- Interference_ith_task = sum_j_from_0_to_i-1 ( ceil( D_i / T_j ) * C_j  )
+
+- summation stops at i-1 because those are all the tasks with higher priority
+- ceil( D_i / T_j ) is a pessimistic estimation of how many times the task j is run before the deadline of i 
+    - notice that the D_i is always larger than T_j because tasks are given priority given the deadline 
+- multiplication is to account for the time spent 
+
+- overall this summation can be seen as the total time spent by all higher priority tasks 
+
+In order to calculate the response time we need to modify a little this formula, because the actual response time (R_i) would
+require to calculate ceil( R_i / T_j ) in the summation, as we would like to know how many tasks have been run before the 
+response time of task i. However the formula becomes (Remember that Response time Ri is the difference 
+between the finishing time and the request):
     
+- R_i = C_i + I_i (where the interference is calculated as before but with R_i instead of D_i )
+
+- I_i = sum_j_from_0_to_i-1 ( ceil( R_i / T_j ) * C_j  )  eq.1
+
+Mathematically this can be solved with an iterative process, doing an educated guess about R_i 
+    
+- Iteration starts with R0_i = sum_j_0_i ( Cj ) which is the first point in time the task i could actually complete
+- Then I0 is calculated with eq.1 and then R1 is calculated with R1 = C + I0
+- If R0 != R1 then we need to do another guess. Starting from R1 we increase it by C and calculate I1 again
+- We repeat untill R(k-1) = R(k)
+
+
+Pseudo code:
+    
+    foreach tau_i in TAU:
+        I_i = sum j from 0 to i-1 ( C_j )
+        do
+            # If estimated I is this, calculate R at this point
+            R_i = I_i + C_i
+            if ( R_i > D_i ) return UNSCHEDULABLE
+            
+            #update interference based on last R guess
+            I_i = sum_j_from_0_to_i-1 ( ceil( R_i / T_j ) * C_j  ) 
+            
+        while( I_i + C_i > R_i )
+        
+        
 
 
 """
@@ -234,14 +273,25 @@ class Display(object):
 
 #the static scheduler provides a scheduling for a period which is then
 #repeated ever and ever again 
-class DM_Scheduler():
+class OS_Simulator():
     
-    def __init__(self,_taskslist):
+    def __init__(self,_taskslist, 
+                 _scheduler=None, 
+                 _guarantee=None, 
+                 _repetition_period=None, 
+                 _offline_scheduling=True):
+        
+        assert( _scheduler != None )
+        assert( _guarantee != None )
         
         self.Display = Display()
         self.TAU = copy.deepcopy(_taskslist)
         
-        print(self.find_task_number_from_ID("D"))
+        self.scheduler = _scheduler
+        self.guarantee = _guarantee
+        self.offline_scheduling = _offline_scheduling
+        
+        #print(self.find_task_number_from_ID("D"))
         
         #rescale all the tasks to have the same timescale
         self.smallest_scale  = min(self.TAU, key=lambda tau : tau.scale).scale
@@ -252,9 +302,18 @@ class DM_Scheduler():
             self.TAU[i].C = int(tau.C * factor)
             self.TAU[i].T = int(tau.T * factor)
             self.TAU[i].scale = self.smallest_scale
+            
+        # If the scheduling must be done offline, then we need to check it beforehand, and not include the IDLE thread
+        # must be performed after rescaling of tasks parameters
+        if self.offline_scheduling:
+            assert( self.guarantee( self.TAU ))
         
-        #sort tasks based on deadline and priority follows this scheme
-        self.TAU.sort(key=lambda tau : tau.D )
+    
+        
+        #in a real world we cannot simulate the entire task set so we need a way to tell if the schedule is feasible or not
+        #one technique for this check is response time analysis
+        
+        
         
         #now find the smallest unit of time and normalize periods
         self.smallest_period  = min(self.TAU, key=lambda tau : tau.T).T
@@ -263,7 +322,11 @@ class DM_Scheduler():
         
         #assuming t=0 is the critical instant then find the repetition time
         #aka when the scheduling repeats itself, which is the least common multiplier
-        self.repetition_period = np.lcm.reduce([tau.T for tau in self.TAU])
+        if _repetition_period == None:
+            self.repetition_period = np.lcm.reduce([tau.T for tau in self.TAU]) 
+        else:
+            #plot only a subset
+            self.repetition_period = _repetition_period
         
         #max deadline -> last element
         #add convenient IDLE task
@@ -273,8 +336,18 @@ class DM_Scheduler():
                              self.repetition_period  #D so always last
                              )     
                          )
+
+    # Scheduler is a function that works on a ready queue, and selects which needs to be run 
+    # Duty of the simulate function is to remove tasks from the ready queue when they are done
+    # and insert them at their correct release time
+    def simulate(self):
         
+        #sort tasks based on deadline and priority follows this scheme
+        #self.TAU.sort(key=lambda tau : tau.D )
+        
+        # We start with the ready queue as the entire task set, because at the critical instant we have this
         ready_queue = copy.deepcopy(self.TAU)
+        
         t = 0
         t_step = 1 #<--- if you change this make sure to change logic for checking refill ready queue
         
@@ -283,17 +356,22 @@ class DM_Scheduler():
         #now propose the DM schedule - simulate all the instants
         while  t < self.repetition_period:
             
+            # return index in ready queue rather than task object as I don't know if returning an object or a reference
+            # and we need to modify it and keep track of the runtime
+            
+            idx_task_run_now = self.scheduler( t, ready_queue )
+            
             #print("ready" , ready_queue)
-            self.schedule.append((ready_queue[0].ID,
-                                  self.find_task_number_from_ID(ready_queue[0].ID),
+            self.schedule.append((ready_queue[idx_task_run_now].ID,
+                                  self.find_task_number_from_ID( ready_queue[idx_task_run_now].ID ),
                                   t))
             #print("schedule" , self.schedule)
         
             #let the highest priority task run and remove it if it finishes
             
             #run returns True if it has finished
-            if ready_queue[0].run(t_step) :
-                ready_queue.pop(0)
+            if ready_queue[idx_task_run_now].run(t_step) :
+                ready_queue.pop(idx_task_run_now)
                 
             #increase simulation time
             t+=t_step
@@ -306,12 +384,77 @@ class DM_Scheduler():
                 if t%tau.T == 0:
                     if tau.running == False:
                         ready_queue.append(tau)
-            
-            #resort the queue to fix priorities
-            ready_queue.sort(key=lambda tau : tau.D )
                 
         
+    def DM_Scheduler(t,ready_queue):
+        # DM scheduler policy which return the index of the task with the smallest deadline
+        # note that this is not EDF, so priorities are fixed. 
         
+        # Minimum element indices in list 
+        # Using list comprehension + min() + enumerate() 
+        temp  = min(ready_queue, key=lambda tau : tau.D)
+        res = [i for i, j in enumerate(ready_queue) if j == temp][0]
+        return res
+    
+    def DM_Guarantee(task_list):
+        
+        #sort tasks by priority 
+        task_list.sort( key=lambda tau: tau.D )
+        
+        """    foreach tau_i in TAU:
+        I_i = sum j from 0 to i-1 ( C_j )
+        do
+            # If estimated I is this, calculate R at this point
+            R_i = I_i + C_i
+            if ( R_i > D_i ) return UNSCHEDULABLE
+            
+            #update interference based on last R guess
+            I_i = sum_j_from_0_to_i-1 ( ceil( R_i / T_j ) * C_j  ) 
+            
+        while( I_i + C_i > R_i )
+        """
+        
+        I = [0]*len(task_list)
+        R = [0]*len(task_list)
+        for i,tau in enumerate(task_list):
+            
+            higher_priority_tasks = task_list[:i]
+            I[i] = sum( map( lambda t: t.C , higher_priority_tasks ) )
+            while_condition = True
+            
+            while( while_condition ):
+                R[i] = I[i] + tau.C
+                if( R[i] > tau.D):
+                    return False
+                I[i] = sum ( [np.ceil( R[i]/t.T) * t.C for t in higher_priority_tasks ] ) 
+                
+                while_condition = ( I[i] + tau.C > R[i] )
+                
+        return True
+            
+            
+    def EDF_Scheduler(t,ready_queue):
+        
+        # Earliest deadline first reorders the active queue based on the closest deadline
+        # It could be done at runtime or offline depending on the tasks type. Since tasks are 
+        # periodic in this OS Simulator class, the scheduling can be done offline. To be honest,
+        # the simulator always performs a dynamic decision, but the guarantee can be explored completely offline
+        
+        #get time elapsed since release time (aka time passed since last period )
+        time_elapsed_since_release = [ t%tau.T for tau in ready_queue  ]
+        deadlines = [tau.D for tau in ready_queue ]
+        
+        time_to_deadline = [ d - t for d,t in zip(deadlines,time_elapsed_since_release) ]
+        
+        temp  = min(time_to_deadline)
+        res = [i for i, j in enumerate(time_to_deadline) if j == temp][0]
+        
+        return res
+    
+    def EDF_Guarantee(task_list):
+        return True
+        
+                
 
     def find_task_number_from_ID(self,ID):
         return [i for i,tau in enumerate(self.TAU) if tau.ID == ID][0]
@@ -360,7 +503,21 @@ if __name__ == "__main__":
     
     TAU = [A,B,C,D]
     
-    S = DM_Scheduler(TAU)
+    #Test DM 
+    """
+    S = OS_Simulator(TAU,
+           OS_Simulator.DM_Scheduler,
+           OS_Simulator.DM_Guarantee,
+           15)
+    """
+    
+    #Test EDF
+    S = OS_Simulator(TAU,
+          OS_Simulator.EDF_Scheduler,
+          OS_Simulator.EDF_Guarantee,
+          15)
+    
+    S.simulate()
     
     S.drawSchedule()
         
