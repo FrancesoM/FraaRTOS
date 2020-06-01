@@ -23,12 +23,19 @@ void vInsertInList(T *n, T* head, STATUS s)
 	IDLE.next = new (c,a)
 	new.prev = IDLE (d)
 	*/
-	head->next->prev = n;
-	n->next = head->next;
-	head->next = n;
-	n->prev = head;
 
-	n->_state = s;
+	// Note that here n prev and n next are never used, only overwritten
+	// This is correct behaviour as when this function is called is to initialize
+	// the note on the list, before this function next and prev have no meaning
+	if(n != head)
+	{
+		head->next->prev = n;
+		n->next = head->next;
+		head->next = n;
+		n->prev = head;
+
+		n->_state = s;
+	}
 }
 
 /**

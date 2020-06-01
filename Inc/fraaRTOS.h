@@ -5,6 +5,7 @@
 #include "core_cm4.h"
 //TODO: maybe use just core_m4.h functions and not those middlewares
 #include "stm32f4xx_ll_cortex.h"
+#include "dlinked_list.h"
 
 //Max number of threads 
 #define NTHREAD_LIMIT 5
@@ -12,7 +13,7 @@
 #define NO_OPT volatile
 
 typedef enum { OS_STATE_RUN, OS_STATE_WAIT, OS_STATE_SLEEP} OS_State_Type;
-typedef enum {OS_HIGH_P, OS_LOW_O} OS_Priority_Type;
+typedef enum {OS_HIGH_P=10, OS_LOW_O=0} OS_Priority_Type;
 
 //first we need a handler to a thread. Every thread is a function that returns void and takes no arguments
 //This is going to be the first instruction of the 

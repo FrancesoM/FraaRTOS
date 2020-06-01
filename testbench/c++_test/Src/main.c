@@ -26,7 +26,7 @@ static void MX_GPIO_Init(void);
 
 auto xos = OS();
 
-//Define my threads
+//Define my threads   
 int volatile thread1_ID;
 void thread1()
 {
@@ -45,7 +45,7 @@ void thread2()
   while(1)
   {
     LL_GPIO_TogglePin(LD4_GPIO_Port,LD4_Pin);
-    xos.OS_Wait(500);
+    xos.OS_Wait(200);
   }
 }
 auto T2 = OS_Thread_Type(thread2,40);
@@ -55,7 +55,7 @@ void thread3()
   while(1)
   {
     LL_GPIO_TogglePin(LD5_GPIO_Port,LD5_Pin);
-    xos.OS_Wait(1000);
+    xos.OS_Wait(2000);
   }
 }
 auto T3 = OS_Thread_Type(thread3,40);
