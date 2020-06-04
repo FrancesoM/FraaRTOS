@@ -1,0 +1,21 @@
+What is an RTOS? 
+
+The OS part:
+	
+	- Library to provide a way to switch between tasks, communicate between them, be sure they can run, be suspended and resumed. 
+
+	- Middleware layer to communicate with the HW peripherals (CMSIS already does a good job)
+
+	- Some advanced features like process virtual memory and kernel calls (restricted operations made by kernel code and not user). 
+
+
+The RT (most important topic here):
+
+	- Drop some more advanced features in favour of a deterministic behaviour at runtime
+	- Tasks can be hard RT or soft RT. Hard means that missing the deadline causes catastrophic effects
+		- What is "catastrophic" depends on the application
+
+	- An RTOS *does not* ensure that the deadlines are matched!!
+	- An RTOS provides the user a deterministic environment to run the tasks and place the user in a position of full control on the timeline execution. 
+
+	- The RTOS does the previous two points by means of a scheduler 
