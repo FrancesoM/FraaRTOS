@@ -1,21 +1,68 @@
 What is an RTOS? 
 
-The OS part:
+(The sections with " * " are the ones directly used for taking decisions in developing FraaRTOS )
+
+1) The OS part:
 	
-	- Library to provide a way to switch between tasks, communicate between them, be sure they can run, be suspended and resumed. 
+	*1.1) Library to provide a way to switch between tasks, communicate between them, be sure they can run, be suspended and resumed. 
 
-	- Middleware layer to communicate with the HW peripherals (CMSIS already does a good job)
+	1.2) Middleware layer to communicate with the HW peripherals (CMSIS already does a good job)
 
-	- Some advanced features like process virtual memory and kernel calls (restricted operations made by kernel code and not user). 
+	1.3) Some advanced features like process virtual memory and kernel calls (restricted operations made by kernel code and not user). 
 
 
-The RT (most important topic here):
+2) The RT (most important topic here):
 
-	- Drop some more advanced features in favour of a deterministic behaviour at runtime
-	- Tasks can be hard RT or soft RT. Hard means that missing the deadline causes catastrophic effects
-		- What is "catastrophic" depends on the application
+	2.1) Drop some more advanced features in favour of a deterministic behaviour at runtime
+	
+	*2.2) Tasks can be hard, firm or soft. Hard means that missing the deadline causes catastrophic effects, firm means that the result is useless after its deadline, but not catastrophic. Soft if the result past deadline is still useful but it might cause a degradation in performance.
+    
+    	2.2.1) What is "catastrophic" depends on the application
 
-	- An RTOS *does not* ensure that the deadlines are matched!!
-	- An RTOS provides the user a deterministic environment to run the tasks and place the user in a position of full control on the timeline execution. 
+		2.2.2) An RTOS *does not* ensure that the deadlines are matched!!
+	
+		2.2.3) An RTOS provides the user a deterministic environment to run the tasks and place the user in a position of full control on the timeline execution. 
 
-	- The RTOS does the previous two points by means of a scheduler 
+		*2.2.4) In general, when an application consists of a hybrid task set, all hard tasks should be guaranteed off line, firm tasks should be guaranteed on line, aborting them if their deadline cannot be met, and soft tasks should be handled to minimize their average response time.
+
+	2.3) The RTOS provides this environment by means of a deterministic scheduler 
+
+		2.3.1) The scheduler fairness is traded for a policy which favours higher priority hard tasks. The priority defines which task is bound to run at a particular moment in time. 
+
+		*2.3.2) The scheduler can assign priorities dinamically or statically. This must no be confused with compile time/runtime, because if the arrival time of all the tasks is already known, even a dynamic priority scheme can be fully checked at compile time. An example is EDF: a task will change its priority during execution depending on how far the absolute deadline is, but if the tasks are all periodic and hence their arrival time is known, a static analysis of feasibility can be done. 
+
+		*2.3.2) A different story happens when some tasks are sporadic, aka the arrival time is not known at compile time. Here the approaches is the following: a feasibility analysis is done at runtime (increasing the time complexity of the scheduler) and a result is provided. How this result is used changes based on the application: if there are soft tasks in the queue, those tasks are dropped until the feasibilty is good again. If the feasibility of hard tasks can't be guaranteed, the system is bad designed, and it will go in failure state
+
+		2.3.3) There could be a "plan B" option that is provided if a hard deadline is not matched, but this state is not desirable, and the user must do the calculations offline. 
+
+	2.4) Stack overflow interesting discussion from https://stackoverflow.com/questions/45958888/what-happens-if-a-hard-realtime-task-exceeds-its-deadline
+
+		2.4.1) What is the "DEADLINE"? The deadline is whatever is necessary for your application to succeed in meeting its requirements; it is not defined by the RTOS, it is defined by your requirements.
+
+		*2.4.2) What happens if the deadline is exceeded? it is not guaranteed by the RTOS and the consequences of failure depend on your application. If nothing bad happens, perhaps the deadline was false and unnecessarily tight. If it fails you need to rethink the schedulability of your system
+
+		*2.4.3) How can RTOS guarantee the deadlines? It can't; it can guarantee deterministic scheduling; the highest priority "ready" task will run immediately (within the constraints of the context switch time) - simple as that, no more. You can still render scheduling non-deterministic even in an RTOS by poor interrupt handler design. Tasks with non-deterministic or widely variable execution time should be given lower priority. 
+
+
+	2.5) Some remarks from the book used to develop the scheduling algorithms "Real Time Systems - Giorgio C. Buttazzo"
+
+		2.5.1) The environment is always an essential component of any real-time system. 
+
+		2.5.2) Some people erroneously believe that it is not worth investing in real-time research because advances in computer hardware will take care of any real-time requirements. Although advances in computer hardware technology will improve system throughput and will increase the computational speed in terms of millions of instructions per second (MIPS), this does not mean that the timing constraints of an application will be met automatically.
+
+		*2.5.3) However short the average response time can be, without a scientific methodology we will never be able to guarantee the individual timing requirements of each task in all possible circumstances. Hence:
+
+		2.5.4) Rather than being fast, an RTOS must be predictable. 
+
+	*2.6) Desirable features of an RTOS
+
+		2.6.1) In any real-time control system, the code of each task is known a priori and hence can be analyzed to determine its characteristics in terms of computation time, resources, and precedence relations with other tasks. Therefore, there is no need to consider a task as an unknown processing entity; rather, its parameters can be used by the operating system to verify its schedulability within the specified timing requirements. 
+
+		2.6.2) Moreover, all hard tasks should be handled by the scheduler to meet their individual deadlines, not to reduce their average response time.
+
+		2.6.3) In addition, in any typical real-time application, the various control activities can be seen as members of a team acting together to accomplish one common goal, which can be the control of a nuclear power plant or an aircraft. This means that tasks are not all independent and it is not strictly necessary to support independent address spaces.
+
+
+
+
+
