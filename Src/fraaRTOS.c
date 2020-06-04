@@ -17,7 +17,8 @@ void OS_IdleThread()
   	//DO NOTHIGN AS IDLE
   }
 }
-OS_Thread_Type IDLE = OS_Thread_Type(OS_IdleThread,20);
+OS_Thread_Type IDLE_WAIT = OS_Thread_Type(OS_IdleThread,10);
+OS_Thread_Type IDLE_ACTIVE = OS_Thread_Type(OS_IdleThread,10);
 
 //Declare the NTHREADS stacks (static allocation of memory) -- How to automate this? maybe using static when 
 //The returned value is for the user to refer to this thread in advance
@@ -28,6 +29,10 @@ OS_Thread_Type::OS_Thread_Type(
 
 	this->_thread_stack_size = threadStack_size;
 	this->_threadHandler = threadHandler;
+
+	//This is needed so tha HEAD will point to itself if list is empty
+	this->next = this;
+	this->prev = this;
 };
 
 //OS constructor - init the stack counter to last element because stack grows backwards
@@ -42,7 +47,8 @@ OS::OS(): _stack_counter(TOTAL_STACK)
 
     //Initialize internal variables
     this->OS_gTime = 0;
-	OS_RegisterThread(&IDLE); 
+	OS_RegisterThread(&IDLE_WAIT); 
+	OS_RegisterThread(&IDLE_ACTIVE); 
 };
 
 //Set the stack thread as pointer to internal vector - this is also useful 
@@ -96,6 +102,9 @@ int OS::OS_RegisterThread(OS_Thread_Type* pThread)
     OS_ThreadIdx_Current++;
     OS_ThreadCnt++;
 
+    //Set up the linked list - all threads are active when registered - critical time
+    vInsertInList<OS_Thread_Type>(pThread,&IDLE_ACTIVE,OS_STATE_RUN);
+
     return 0;
 
 };
@@ -126,11 +135,13 @@ void OS::OS_Start()
 	__NVIC_SetPriority(PendSV_IRQn,15);
 	//Set this to switch from main contex just the first time
 	OS_FirstEntry = 1;
-	//Set all threads to running
+	// Init all the waiting periods, don't set them to RUN here because 
+	// the scheduling decisions will be done based on the linked list they belong
+	// to, rather than their actual status
  	for( int i = 0; i < OS_ThreadCnt; i++)
 	{
 		auto pcurrent = OS_ActiveThreads[i];
-		pcurrent->_state = OS_STATE_RUN;
+		//pcurrent->_state = OS_STATE_RUN;
 		pcurrent->_time_to_wake = 0;
 		pcurrent->_time_at_wait = 0;
 	}   
@@ -160,25 +171,35 @@ inline void OS::OS_SchedAlgo()
 	//The second step is to update the current thread. 
 	//Update current thread, which is what was next before. Then choose what goes next.
 
-	//OS_ThreadIdx_Current=OS_ThreadIdx_Next;
-	OS_ThreadIdx_Type OS_BeginIdx          			= OS_GetCurrentPointer();
-	OS_ThreadIdx_Type OS_ThreadIdx_Next_Tentative	= (OS_GetCurrentPointer() + 1) % OS_GetThreadCnt();
+	//Idea is to scan the active list
+	auto pActiveHead = &IDLE_ACTIVE;
+	auto pcurrent = IDLE_ACTIVE.next;
+
+	auto highestPrio = pcurrent->_priority;
+	auto highestPrioID = pcurrent->_threadID;
+
+	//Already compare next
+	pcurrent = pcurrent->next;
 
 	//Iterate until find a thread that is in the run state, or until you circle to where the search began
-	while( OS_ThreadIdx_Next_Tentative !=  OS_BeginIdx )
+	while( pcurrent !=  pActiveHead )
 	{
-		if( OS_GetThreadBasePtr(OS_ThreadIdx_Next_Tentative)->_state == OS_STATE_RUN )
+		// Choose based on scheduling policy - find highest prio
+		if (pcurrent->_priority > highestPrio)
 		{
-			//A candidate next thread has been found, set pendSV and break while
-			OS_SetNextPointer(OS_ThreadIdx_Next_Tentative);
-			SCB->ICSR 			|= SCB_ICSR_PENDSVSET_Msk;
-			break;
+			highestPrio = pcurrent->_priority;
+			highestPrioID = pcurrent->_threadID;
 		}
-		else
-		{
-			//Just try the next one
-			OS_ThreadIdx_Next_Tentative = (OS_ThreadIdx_Next_Tentative + 1) % OS_GetThreadCnt();
-		}
+		//Go to the next one
+		pcurrent = pcurrent->next;
+	}
+
+	//Issue a context switch if next is different than current
+	if( highestPrioID != OS_GetCurrentPointer() )
+	{
+		//A candidate next thread has been found, set pendSV and break while
+		OS_SetNextPointer(highestPrioID);
+		SCB->ICSR 			|= SCB_ICSR_PENDSVSET_Msk;
 	}
 }
 
@@ -204,22 +225,28 @@ void OS::OS_SetNextPointer(OS_ThreadIdx_Type next)
 
 void OS::OS_Update_Threads()
 {
-	for( int i = 0; i < OS_ThreadCnt; i++)
+	__disable_irq();
+	//Scan the wait list 
+	auto pWaitHead = &IDLE_WAIT;
+	auto pcurrent = IDLE_WAIT.next;
+	while( pcurrent != pWaitHead )
 	{
-		auto pcurrent = OS_ActiveThreads[i];
-		
-		//If state is RUN no need to count elapsed, if state is SLEEP it won't be woken anyway
+		// This check is needed because a thread might be in the wait list and not waiting, but sleeping
+		// the difference is that sleep finishes when someone calls wakeup, so it's not bound to time
 		if( pcurrent->_state == OS_STATE_WAIT)
 		{
-			int elapsed_time = OS_gTime - pcurrent->_time_at_wait;
+			int elapsed_time = this->OS_gTime - pcurrent->_time_at_wait;
 			if (elapsed_time >= pcurrent->_time_to_wake)
 			{
-				//update the state because it has to be waken up
-				pcurrent->_state = OS_STATE_RUN;
+				//Update list pcurrent belongs to, hence move to active list
+				vUpdateInList<OS_Thread_Type>(pcurrent,&IDLE_ACTIVE,OS_STATE_RUN);
 			}			
 		}
 
+		pcurrent = pcurrent->next;
+
 	}
+	__enable_irq();
 }
 
 void OS::OS_Wait(unsigned int ms)
@@ -227,11 +254,12 @@ void OS::OS_Wait(unsigned int ms)
 	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
 	//on the current thread which called OS_Wait, otherwise everything is broken.
 	__disable_irq();
-	//Get current thread
+	//Get current thread - TODO: THIS MECHANISM MUST BE IMPROVED  to not use OS_ThreadIdx_Current
 	auto pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
 	pcurrent->_time_to_wake = ms;
 	pcurrent->_time_at_wait = OS_gTime;
-	pcurrent->_state = OS_STATE_WAIT;
+	//Remove from active list - put in wait list
+	vUpdateInList<OS_Thread_Type>(pcurrent,&IDLE_WAIT,OS_STATE_WAIT);	
 	__enable_irq();
 	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
 	//This call is important, otherwise we might keep going on with the thread in the WAIT state, something tht 
@@ -245,9 +273,10 @@ void OS::OS_Sleep()
 	//Critical section, we don't want this to be interrupted by OS_Sched, for instance. This must always operate 
 	//on the current thread which called OS_Wait, otherwise everything is broken.
 	__disable_irq();
-	//Get current thread
+	//Get current thread TODO: THIS MECHANISM MUST BE IMPROVED  to not use OS_ThreadIdx_Current
 	auto pcurrent = OS_ActiveThreads[OS_ThreadIdx_Current];
-	pcurrent->_state = OS_STATE_SLEEP;
+	//Remove from active list - put in wait list
+	vUpdateInList<OS_Thread_Type>(pcurrent,&IDLE_WAIT,OS_STATE_SLEEP);
 	__enable_irq();
 	//We now need to call the sched, that will do the context switch to IDLE if eerythin is OS_STATE_WAIT
 	OS_Sched();
@@ -259,7 +288,8 @@ void OS::OS_Awake(int threadID)
 	__disable_irq();
 	//Get current thread
 	auto pcurrent = OS_ActiveThreads[threadID];
-	pcurrent->_state = OS_STATE_RUN;
+	//Remove from WAIT list - put in ACTIVE list
+	vUpdateInList<OS_Thread_Type>(pcurrent,&IDLE_ACTIVE,OS_STATE_RUN);
 	__enable_irq();
 	//OS_Sched();
 }
