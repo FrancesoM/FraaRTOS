@@ -7,7 +7,7 @@ get_ipython().run_line_magic('matplotlib', 'qt')
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
-
+import random
 """
 Created on Wed Apr 29 22:59:47 2020
 
@@ -193,17 +193,16 @@ COLORS = [
 class Task(object):
     
     SCALE = {"s" : 1, "ms": 0.001, "us": 0.000001}
-    
-    def __init__(self,ID,runtime,period,deadline,scale="ms"):
-        assert(deadline >= runtime)
+      
+    def __init__(self,ID,runtime,deadline,scale="ms"):
+        
         self.ID = ID
         self.D = int(deadline)
         self.C = int(runtime)
-        self.T = int(period)
         self.scale = Task.SCALE[scale]
         self.time_has_run = 0
         self.running = False
-        
+    
     def run(self,time):
         #print("Running " + self.ID)
         self.running = True
@@ -224,6 +223,38 @@ class Task(object):
     
     __repr__ = __str__
 
+class PeriodicTask(Task):
+    
+    def __init__(self,ID,runtime,period,deadline,scale="ms"):
+
+        self.T = int(period)
+        super().__init__(ID,runtime,deadline,scale)
+
+    def active(self,time):
+        
+        if time%self.T == 0:
+            if self.running == False:
+                return True
+        
+        return False
+        
+
+class SporadicTask():
+    
+    # frequency is how many activations per 100 units of time
+    def __init__(self,ID,runtime,frequency,deadline,scale="ms"):
+
+        self.F = frequency
+        super().__init__(ID,runtime,deadline,scale)
+        
+    def active(self,time):
+        
+        if random.randint(0,100) < self.F:
+            return True
+        
+        return False
+    
+    
 
 #class to draw the scheduling
 class Display(object):
@@ -330,7 +361,7 @@ class OS_Simulator():
         
         #max deadline -> last element
         #add convenient IDLE task
-        self.TAU.append(Task("IDLE", #ID
+        self.TAU.append(PeriodicTask("IDLE", #ID
                              self.repetition_period, #C
                              self.repetition_period, #T
                              self.repetition_period  #D so always last
@@ -381,79 +412,8 @@ class OS_Simulator():
             for tau in self.TAU:
                 #if the time is aligned to the period repetition
                 #print("t: {} mod Period {} -> {}".format(t,tau.T,t%tau.T))
-                if t%tau.T == 0:
-                    if tau.running == False:
-                        ready_queue.append(tau)
-                
-        
-    def DM_Scheduler(t,ready_queue):
-        # DM scheduler policy which return the index of the task with the smallest deadline
-        # note that this is not EDF, so priorities are fixed. 
-        
-        # Minimum element indices in list 
-        # Using list comprehension + min() + enumerate() 
-        temp  = min(ready_queue, key=lambda tau : tau.D)
-        res = [i for i, j in enumerate(ready_queue) if j == temp][0]
-        return res
-    
-    def DM_Guarantee(task_list):
-        
-        #sort tasks by priority 
-        task_list.sort( key=lambda tau: tau.D )
-        
-        """    foreach tau_i in TAU:
-        I_i = sum j from 0 to i-1 ( C_j )
-        do
-            # If estimated I is this, calculate R at this point
-            R_i = I_i + C_i
-            if ( R_i > D_i ) return UNSCHEDULABLE
-            
-            #update interference based on last R guess
-            I_i = sum_j_from_0_to_i-1 ( ceil( R_i / T_j ) * C_j  ) 
-            
-        while( I_i + C_i > R_i )
-        """
-        
-        I = [0]*len(task_list)
-        R = [0]*len(task_list)
-        for i,tau in enumerate(task_list):
-            
-            higher_priority_tasks = task_list[:i]
-            I[i] = sum( map( lambda t: t.C , higher_priority_tasks ) )
-            while_condition = True
-            
-            while( while_condition ):
-                R[i] = I[i] + tau.C
-                if( R[i] > tau.D):
-                    return False
-                I[i] = sum ( [np.ceil( R[i]/t.T) * t.C for t in higher_priority_tasks ] ) 
-                
-                while_condition = ( I[i] + tau.C > R[i] )
-                
-        return True
-            
-            
-    def EDF_Scheduler(t,ready_queue):
-        
-        # Earliest deadline first reorders the active queue based on the closest deadline
-        # It could be done at runtime or offline depending on the tasks type. Since tasks are 
-        # periodic in this OS Simulator class, the scheduling can be done offline. To be honest,
-        # the simulator always performs a dynamic decision, but the guarantee can be explored completely offline
-        
-        #get time elapsed since release time (aka time passed since last period )
-        time_elapsed_since_release = [ t%tau.T for tau in ready_queue  ]
-        deadlines = [tau.D for tau in ready_queue ]
-        
-        time_to_deadline = [ d - t for d,t in zip(deadlines,time_elapsed_since_release) ]
-        
-        temp  = min(time_to_deadline)
-        res = [i for i, j in enumerate(time_to_deadline) if j == temp][0]
-        
-        return res
-    
-    def EDF_Guarantee(task_list):
-        return True
-        
+                if tau.active(t):
+                    ready_queue.append(tau)
                 
 
     def find_task_number_from_ID(self,ID):
@@ -483,43 +443,7 @@ class OS_Simulator():
         
         
         self.Display.plot(len(self.TAU),len(self.schedule))
- 
 
-
-if __name__ == "__main__":
-        
-    """
-       Ci Ti Di
-    τ1 1 4 3
-    τ2 1 5 4
-    τ3 2 6 5
-    τ4 1 11 10
-    """
-    
-    A = Task("A",1,4,3)
-    B = Task("B",1,5,4)
-    C = Task("C",2,6,5)
-    D = Task("D",1,11,10)
-    
-    TAU = [A,B,C,D]
-    
-    #Test DM 
-    """
-    S = OS_Simulator(TAU,
-           OS_Simulator.DM_Scheduler,
-           OS_Simulator.DM_Guarantee,
-           15)
-    """
-    
-    #Test EDF
-    S = OS_Simulator(TAU,
-          OS_Simulator.EDF_Scheduler,
-          OS_Simulator.EDF_Guarantee,
-          15)
-    
-    S.simulate()
-    
-    S.drawSchedule()
         
         
         
